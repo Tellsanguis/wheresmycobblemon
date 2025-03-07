@@ -55,7 +55,7 @@ Renommez le fichier généré en `biomes_tags.txt`.
  pip install -r requirements.txt
  ```
 
-##Utilisation
+## Utilisation
 **Extraction des Données**
 
 Pour extraire les données depuis les fichiers JSON et générer un fichier Excel, utilisez le script extract.py (ou extract_and_merge.py si vous avez fusionné avec un tableur additionnel).
@@ -87,7 +87,7 @@ python wherepokemon.py
 La commande /where est disponible sur votre serveur et vous permet d’afficher les conditions de spawn pour un Pokémon donné.
 
 
-##Utilisation avec Docker
+## Docker
 
 Un fichier docker-compose.yml est fourni pour exécuter le bot dans un conteneur Docker.
 
