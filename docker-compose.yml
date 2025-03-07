@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  wheresmypokemon:
+    container_name: wheresmypokemon
+    image: python:3.9
+    environment:
+      - DISCORD_BOT_TOKEN=
+      - DISCORD_GUILD_ID=
+    working_dir: /app
+    volumes:
+      - /sur/ton/hote/biomes_tags.txt:/documents/biomes_tags.txt
+      - /sur/ton/hote/mes_donnees.xlsx:/documents/mes_donnees.xlsx
+      - /sur/ton/hote:/app
+    command: ["/bin/sh", "-c", "pip install -r /app/requirements.txt && python /app/wherepokemon.py"]
+    restart: always
