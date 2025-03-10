@@ -5,133 +5,32 @@ from discord import app_commands
 import os
 import logging
 import re
+import textwrap
 
-# Configuration du logging pour suivre l'activité du bot
+# Configuration du système de journalisation pour suivre l'activité du bot
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()]
 )
 
-# Récupération des variables d'environnement pour la configuration
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
-EXCEL_FILE = "/documents/mes_donnees.xlsx"
-TAGS_FILE = "/documents/biomes_tags.txt"
+# Récupération des variables d'environnement nécessaires au fonctionnement du bot
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Token d'authentification du bot Discord
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))  # ID du serveur Discord
+EXCEL_FILE = "/documents/mes_donnees.xlsx"  # Chemin du fichier Excel contenant les données Pokémon
 
-# Vérification que l'ID du serveur Discord est bien défini
+# Vérification que l'ID du serveur Discord est configuré
 if GUILD_ID == 0:
     logging.error("❌ DISCORD_GUILD_ID n'est pas défini. Vérifie tes variables d'environnement.")
     exit(1)
 
-# Variables globales pour stocker les données de spawn et les tags de biome
+# Variable globale pour stocker les données de spawn des Pokémon
 spawn_data = []
-BIOME_TAGS = {}
-
-# Charge le fichier TXT contenant le tableau ASCII et construit un mapping des tags
-def load_biome_tags():
-    """
-    Charge et analyse un fichier texte contenant un tableau ASCII de correspondances
-    entre les tags de biome et les noms de biome Minecraft
-    """
-    mapping = {}
-    try:
-        with open(TAGS_FILE, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-        # On ignore les lignes qui ne commencent pas par "|" ou qui sont des bordures
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("+") or "Registry name" in line:
-                continue
-            if line.startswith("|"):
-                parts = line.split("|")
-                if len(parts) < 4:
-                    continue
-                registry = parts[2].strip()
-                tags_field = parts[3].strip()
-                if not registry or not tags_field:
-                    continue
-                # Traitement des tags pour chaque biome
-                tags = [t.strip() for t in tags_field.split(",") if t.strip()]
-                for tag in tags:
-                    if not tag.startswith("#"):
-                        tag = "#" + tag
-                    if tag not in mapping:
-                        mapping[tag] = []
-                    if registry not in mapping[tag]:
-                        mapping[tag].append(registry)
-    except Exception as e:
-        logging.error(f"Erreur lors de la lecture du fichier des tags: {e}")
-    return mapping
-
-# Fonction récursive pour résoudre un tag en une liste de biomes
-def resolve_tag(tag, mapping, seen=None):
-    """
-    Résout récursivement un tag de biome en une liste de biomes spécifiques
-    Gère les références circulaires avec l'ensemble 'seen'
-    """
-    if seen is None:
-        seen = set()
-    # Évite les boucles infinies en gardant trace des tags déjà vus
-    if tag in seen:
-        return []
-    seen.add(tag)
-    
-    if tag in mapping:
-        result = []
-        for item in mapping[tag]:
-            # Si l'élément est lui-même un tag, résolution récursive
-            if item.startswith("#") and "is_" in item:
-                result.extend(resolve_tag(item, mapping, seen))
-            else:
-                result.append(item)
-        return result
-    else:
-        # Tentative de remplacement de préfixes pour gérer différentes notations de tags
-        prefixes = ["#biome:", "#minecraft:", "#cobblemon:"]
-        for p in prefixes:
-            if tag.startswith(p):
-                remainder = tag[len(p):]
-                for alt in prefixes:
-                    new_tag = alt + remainder
-                    if new_tag in mapping:
-                        return resolve_tag(new_tag, mapping, seen)
-        # Si aucune correspondance n'est trouvée, retourne le tag sans le # comme biome
-        return [tag.lstrip("#")]
-
-# Remplace dans une chaîne tous les tags par la liste de biomes correspondants
-def resolve_biomes(biomes_str, mapping):
-    """
-    Analyse une chaîne contenant plusieurs tags/biomes séparés par des virgules
-    et résout chaque tag en une liste de biomes spécifiques
-    """
-    if not biomes_str or biomes_str == "∅":
-        return biomes_str
-    
-    # Sépare la chaîne en parties individuelles
-    parts = [part.strip() for part in biomes_str.split(",")]
-    resolved_parts = []
-    
-    # Traite chaque partie individuellement
-    for part in parts:
-        if "is_" in part:  # C'est probablement un tag
-            if not part.startswith("#"):
-                part = "#" + part
-            resolved = resolve_tag(part, mapping)
-            if resolved:
-                resolved_parts.extend(resolved)
-            else:
-                resolved_parts.append(part.lstrip("#"))
-        else:
-            resolved_parts.append(part)
-    
-    # Élimine les doublons et trie les résultats
-    resolved_parts = sorted(set(resolved_parts))
-    return ", ".join(resolved_parts)
 
 def load_spawn_data_from_excel():
     """
-    Charge les données de spawn depuis le fichier Excel
+    Charge les données de spawn des Pokémon depuis le fichier Excel.
+    Les données sont stockées dans la variable globale spawn_data.
     """
     global spawn_data
     try:
@@ -144,138 +43,248 @@ def load_spawn_data_from_excel():
 
 def safe_field(val):
     """
-    Normalise les valeurs des champs pour l'affichage
-    Gère les valeurs nulles, NaN, vides, booléennes
+    Gère de manière sécurisée l'affichage des valeurs des champs.
+    
+    Args:
+        val: Valeur à sécuriser pour l'affichage
+        
+    Returns:
+        Une représentation textuelle sécurisée de la valeur
     """
     try:
+        # Gestion des valeurs NaN de pandas
         if pd.isna(val):
             return "∅"
     except Exception:
         pass
+    # Conversion des booléens en chaînes de caractères
     if isinstance(val, bool):
         return str(val).lower()
     val_str = str(val)
+    # Remplacement des chaînes vides ou "nan" par un symbole spécial
     if val_str.strip() == "" or val_str.lower() == "nan":
         return "∅"
     return val_str
 
-# Configuration des intentions Discord nécessaires
-intents = discord.Intents.default()
-intents.message_content = True
+def split_long_field(label, emoji, value, max_length=1700):
+    """
+    Divise un champ trop long en plusieurs parties pour respecter les limites de Discord.
+    
+    Args:
+        label: Le nom du champ
+        emoji: L'emoji à utiliser
+        value: La valeur du champ
+        max_length: Longueur maximale par message
+        
+    Returns:
+        Une liste de chaînes, chacune contenant une partie du champ
+    """
+    if len(value) <= max_length:
+        return [f"{emoji} **{label}** : {value}"]
+    
+    # Diviser la liste des valeurs (par exemple, liste de biomes)
+    items = [item.strip() for item in value.split(',')]
+    
+    parts = []
+    current_part = []
+    current_length = 0
+    base_prefix = f"{emoji} **{label}** : "
+    cont_prefix = f"{emoji} **{label} (suite)** : "
+    
+    for item in items:
+        # Tenir compte des préfixes dans le calcul de la longueur
+        prefix = base_prefix if not current_part else cont_prefix
+        # +2 pour la virgule et l'espace
+        item_length = len(item) + 2
+        
+        # Si ajouter cet élément dépasse la limite, commencer une nouvelle partie
+        if current_part and (current_length + item_length + len(prefix) > max_length):
+            parts.append(prefix + ", ".join(current_part))
+            current_part = [item]
+            current_length = item_length
+        else:
+            current_part.append(item)
+            current_length += item_length
+    
+    # Ajouter la dernière partie
+    if current_part:
+        prefix = base_prefix if not parts else cont_prefix
+        parts.append(prefix + ", ".join(current_part))
+    
+    return parts
 
-# Initialisation du bot Discord
+def prepare_message_parts(fields_output, header, max_length=1900):
+    """
+    Prépare les parties du message à envoyer pour respecter les limites de Discord.
+    
+    Args:
+        fields_output: Liste des champs à inclure
+        header: En-tête du message
+        max_length: Longueur maximale par message
+        
+    Returns:
+        Une liste de chaînes, chacune correspondant à une partie du message
+    """
+    message_parts = []
+    current_part = header
+    
+    for field in fields_output:
+        # Si ce champ fait dépasser la longueur maximale, commencer une nouvelle partie
+        if len(current_part + "\n" + field) > max_length:
+            message_parts.append(current_part)
+            current_part = field
+        else:
+            if current_part == header:
+                current_part += field
+            else:
+                current_part += "\n" + field
+    
+    # Ajouter la dernière partie
+    if current_part:
+        message_parts.append(current_part)
+    
+    return message_parts
+
+# Configuration des permissions et fonctionnalités du bot Discord
+intents = discord.Intents.default()
+intents.message_content = True  # Permet au bot de lire le contenu des messages
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.tree.command(guild=discord.Object(id=GUILD_ID), name="where", description="Affiche les conditions de spawn d'un Pokémon")
-@app_commands.describe(pokemon="Nom du Pokémon recherché")
-async def where(interaction: discord.Interaction, pokemon: str):
+@app_commands.describe(pokemon="Nom du Pokémon recherché", show_all="Afficher tous les champs (même vides)")
+async def where(interaction: discord.Interaction, pokemon: str, show_all: bool = False):
     """
-    Commande slash Discord pour afficher les conditions de spawn d'un Pokémon spécifique
-    """
-    # Recherche du Pokémon dans les données chargées (insensible à la casse)
-    results = [entry for entry in spawn_data if safe_field(entry.get("Pokemon")).lower() == pokemon.lower()]
+    Commande slash pour afficher les conditions de spawn d'un Pokémon.
     
+    Args:
+        interaction: L'interaction Discord
+        pokemon: Le nom du Pokémon recherché
+        show_all: Booléen pour afficher tous les champs, même vides
+    """
+    # Recherche du Pokémon dans les données chargées
+    results = [entry for entry in spawn_data if safe_field(entry.get("Pokemon")).lower() == pokemon.lower()]
     if not results:
         await interaction.response.send_message(f"❌ Aucune information trouvée pour **{pokemon}**.", ephemeral=True)
         return
     
-    messages = []
-    for entry in results:
-        # Construction de l'en-tête du message
-        header = f"🔍 **Informations sur {safe_field(entry.get('Pokemon'))}**\n"
+    # Répondre d'abord pour éviter le timeout de Discord (3 secondes)
+    await interaction.response.send_message(f"Recherche d'informations sur **{pokemon}**...", ephemeral=True)
+    
+    # Traiter chaque entrée correspondant au Pokémon (peut être plusieurs)
+    for entry_index, entry in enumerate(results):
+        header = f"🔍 **Informations sur {safe_field(entry.get('Pokemon'))} (Entrée {entry_index+1}/{len(results)})**\n"
         fields_output = []
         
-        # Fonction helper pour ajouter un champ formaté au message
-        def add_field(label, emoji, value):
-            if value != "∅":
+        # Définition des champs à afficher avec leurs emojis
+        field_mapping = [
+            ("Rareté", "📌", "Bucket"),
+            ("Dimensions", "🌍", "Dimensions"),
+            ("Structures", "🏰", "Structures"),
+            ("Phase de Lune", "🌙", "Moon Phase"),
+            ("Can See Sky", "☀️", "Can See Sky"),
+            ("Min X", "⬅️", "Min X"),
+            ("Min Y", "⬇️", "Min Y"),
+            ("Min Z", "↙️", "Min Z"),
+            ("Max X", "➡️", "Max X"),
+            ("Max Y", "⬆️", "Max Y"),
+            ("Max Z", "↗️", "Max Z"),
+            ("Min Light", "💡", "Min Light"),
+            ("Max Light", "💡", "Max Light"),
+            ("Min Sky Light", "🌤️", "Min Sky Light"),
+            ("Max Sky Light", "🌤️", "Max Sky Light"),
+            ("Time Range", "⏰", "Time Range"),
+            ("Is Raining", "☔", "Is Raining"),
+            ("Is Thundering", "⚡", "Is Thundering"),
+            ("Is Slime Chunk", "🟢", "Is Slime Chunk"),
+            ("Labels", "🏷️", "Labels"),
+            ("Label Mode", "📋", "Label Mode"),
+            ("Min Width", "📏", "Min Width"),
+            ("Max Width", "📐", "Max Width"),
+            ("Min Height", "↕️", "Min Height"),
+            ("Max Height", "↕️", "Max Height"),
+            ("Needed Nearby Blocks", "🧱", "Needed Nearby Blocks"),
+            ("Needed Base Blocks", "🧱", "Needed Base Blocks"),
+            ("Min Depth", "⚓", "Min Depth"),
+            ("Max Depth", "⚓", "Max Depth"),
+            ("Fluid Is Source", "🔄", "Fluid Is Source"),
+            ("Fluid Block", "🌊", "Fluid Block"),
+            ("Key Item", "🔑", "Key Item"),
+            ("Stone Requirements", "🪨", "Stone Requirements"),
+            ("Custom Pokemons In Team", "👥", "Custom Pokemons In Team"),
+        ]
+        
+        # Traiter tous les champs normaux
+        for label, emoji, field_name in field_mapping:
+            value = safe_field(entry.get(field_name))
+            if show_all or (value != "∅" and value):
                 fields_output.append(f"{emoji} **{label}** : {value}")
         
-        # Ajout des différents champs avec leur emoji correspondant
-        add_field("Rareté", "📌", safe_field(entry.get("Bucket")))
-        add_field("Dimensions", "🌍", safe_field(entry.get("Dimensions")))
+        # Traitement spécial pour le champ biomes qui peut être très long
+        biomes_value = safe_field(entry.get("Biomes"))
+        if show_all or (biomes_value != "∅" and biomes_value):
+            biomes_parts = split_long_field("Biomes", "🏞️", biomes_value)
+            fields_output.extend(biomes_parts)
         
-        # Résolution des tags de biome en noms de biomes spécifiques
-        biomes_raw = safe_field(entry.get("Biomes"))
-        biomes_resolved = resolve_biomes(biomes_raw, BIOME_TAGS)
-        add_field("Biomes", "🏞️", biomes_resolved)
+        # Message par défaut si aucune information n'est disponible
+        if not fields_output:
+            fields_output.append("Aucune information spécifique n'est disponible pour ce Pokémon.")
         
-        add_field("Structures", "🏰", safe_field(entry.get("Structures")))
-        add_field("Phase de Lune", "🌙", safe_field(entry.get("Moon Phase")))
-        add_field("Can See Sky", "☀️", safe_field(entry.get("Can See Sky")))
-        add_field("Min X", "⬅️", safe_field(entry.get("Min X")))
-        add_field("Min Y", "⬇️", safe_field(entry.get("Min Y")))
-        add_field("Min Z", "↙️", safe_field(entry.get("Min Z")))
-        add_field("Max X", "➡️", safe_field(entry.get("Max X")))
-        add_field("Max Y", "⬆️", safe_field(entry.get("Max Y")))
-        add_field("Max Z", "↗️", safe_field(entry.get("Max Z")))
-        add_field("Min Light", "💡", safe_field(entry.get("Min Light")))
-        add_field("Max Light", "💡", safe_field(entry.get("Max Light")))
-        add_field("Min Sky Light", "🌤️", safe_field(entry.get("Min Sky Light")))
-        add_field("Max Sky Light", "🌤️", safe_field(entry.get("Max Sky Light")))
-        add_field("Time Range", "⏰", safe_field(entry.get("Time Range")))
-        add_field("Is Raining", "☔", safe_field(entry.get("Is Raining")))
-        add_field("Is Thundering", "⚡", safe_field(entry.get("Is Thundering")))
-        add_field("Is Slime Chunk", "🟢", safe_field(entry.get("Is Slime Chunk")))
-        add_field("Labels", "🏷️", safe_field(entry.get("Labels")))
-        add_field("Label Mode", "📋", safe_field(entry.get("Label Mode")))
-        add_field("Min Width", "📏", safe_field(entry.get("Min Width")))
-        add_field("Max Width", "📐", safe_field(entry.get("Max Width")))
-        add_field("Min Height", "↕️", safe_field(entry.get("Min Height")))
-        add_field("Max Height", "↕️", safe_field(entry.get("Max Height")))
-        add_field("Needed Nearby Blocks", "🧱", safe_field(entry.get("Needed Nearby Blocks")))
-        add_field("Needed Base Blocks", "🧱", safe_field(entry.get("Needed Base Blocks")))
-        add_field("Min Depth", "⚓", safe_field(entry.get("Min Depth")))
-        add_field("Max Depth", "⚓", safe_field(entry.get("Max Depth")))
-        add_field("Fluid Is Source", "🔄", safe_field(entry.get("Fluid Is Source")))
-        add_field("Fluid Block", "🌊", safe_field(entry.get("Fluid Block")))
-        add_field("Key Item", "🔑", safe_field(entry.get("Key Item")))
-        add_field("Stone Requirements", "🪨", safe_field(entry.get("Stone Requirements")))
-        add_field("Custom Pokemons In Team", "👥", safe_field(entry.get("Custom Pokemons In Team")))
+        # Préparer les parties du message pour respecter la limite de caractères de Discord
+        all_parts = prepare_message_parts(fields_output, header)
         
-        # Assemblage du message complet
-        msg = header + "\n".join(fields_output)
-        messages.append(msg)
-    
-    # Concaténation de tous les résultats avec double saut de ligne entre chacun
-    response = "\n\n".join(messages)
-    await interaction.response.send_message(response, ephemeral=True)
+        # Envoyer chaque partie du message
+        for i, part in enumerate(all_parts):
+            part_indicator = f" (Partie {i+1}/{len(all_parts)})" if len(all_parts) > 1 else ""
+            try:
+                await interaction.followup.send(part + part_indicator, ephemeral=True)
+            except discord.errors.HTTPException as e:
+                # En cas d'erreur, découper davantage le message
+                logging.error(f"Erreur lors de l'envoi du message (longueur: {len(part)}): {e}")
+                # Si le message est encore trop long, le diviser davantage
+                chunks = textwrap.wrap(part, width=1900, replace_whitespace=False, break_long_words=True)
+                for j, chunk in enumerate(chunks):
+                    sub_indicator = f" (Partie {i+1}.{j+1}/{len(all_parts)}.{len(chunks)})"
+                    await interaction.followup.send(chunk + sub_indicator, ephemeral=True)
 
 @where.autocomplete("pokemon")
 async def pokemon_autocomplete(interaction: discord.Interaction, current: str):
     """
-    Gère l'autocomplétion des noms de Pokémon pour la commande /where
+    Fonction d'autocomplétion pour la commande where.
+    Suggère des noms de Pokémon basés sur le texte saisi.
+    
+    Args:
+        interaction: L'interaction Discord
+        current: Le texte actuellement saisi par l'utilisateur
+        
+    Returns:
+        Une liste de suggestions pour l'autocomplétion
     """
-    # Récupère tous les noms de Pokémon uniques dans les données
+    # Récupérer tous les noms de Pokémon disponibles dans les données
     names = {safe_field(entry.get("Pokemon")) for entry in spawn_data if safe_field(entry.get("Pokemon")) != "∅"}
     names = sorted(names)
-    
-    # Filtre les noms en fonction de la saisie actuelle et limite à 25 résultats (limite Discord)
+    # Filtrer et limiter les résultats à 25 selon les restrictions de Discord
     return [
         app_commands.Choice(name=name, value=name)
         for name in names if current.lower() in name.lower()
-    ][:25]
+    ][:25]  # Discord limite à 25 options maximum
 
 @bot.event
 async def on_ready():
     """
-    Événement déclenché lorsque le bot est connecté et prêt
+    Fonction appelée lorsque le bot est connecté et prêt.
+    Charge les données et synchronise les commandes slash.
     """
-    global BIOME_TAGS
-    
-    # Chargement des données nécessaires au démarrage
-    BIOME_TAGS = load_biome_tags()
-    logging.info(f"{len(BIOME_TAGS)} mappings de biome tags chargés depuis le fichier TXT.")
+    # Charger les données depuis le fichier Excel
     load_spawn_data_from_excel()
-    
-    # Synchronisation des commandes slash avec Discord
     guild = discord.Object(id=GUILD_ID)
     try:
+        # Synchroniser les commandes slash pour qu'elles apparaissent dans Discord
         synced = await bot.tree.sync(guild=guild)
         logging.info(f"{len(synced)} commandes synchronisées sur le serveur {guild.id}.")
     except Exception as e:
         logging.error(f"Erreur de synchronisation des commandes : {e}")
-    
     logging.info(f"✅ Bot connecté en tant que {bot.user}")
 
-# Démarrage du bot avec le token
+# Démarrer le bot avec le token fourni
 bot.run(TOKEN)
