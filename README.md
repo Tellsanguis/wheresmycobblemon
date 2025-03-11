@@ -129,13 +129,18 @@ Pour lancer le bot via Docker :
 docker-compose up -d
  ```
 
-### Utilisation sans Docker
+# Utilisation sans Docker
 
-Si vous n'utilisez pas Docker, vous devez modifier directement le fichier `wherepokemon.py` pour y ajouter vos informations d'identification :
+Si vous n'utilisez pas Docker, vous devez installer les dépendances requises et modifier directement le fichier `wherepokemon.py` pour y ajouter vos informations d'identification :
 
-1. Ouvrez le fichier `wherepokemon.py` dans un éditeur de texte
-2. Localisez les lignes où les variables TOKEN et GUILD_ID sont définies
-3. Remplacez-les par vos propres informations comme suit :
+1. Installez les dépendances requises :
+   ```
+   pip install -r requirements.txt
+   ```
+
+2. Ouvrez le fichier `wherepokemon.py` dans un éditeur de texte
+3. Localisez les lignes où les variables TOKEN et GUILD_ID sont définies
+4. Remplacez-les par vos propres informations comme suit :
    ```python
    # Remplacez ces lignes
    TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -145,11 +150,11 @@ Si vous n'utilisez pas Docker, vous devez modifier directement le fichier `where
    TOKEN = "votre_token_discord_ici"  # Collez votre token entre les guillemets
    GUILD_ID = int("012345678901234567")  # Remplacez par l'ID de votre serveur entre guillemets
    ```
-4. Vous pouvez également définir le chemin vers votre fichier Excel :
+5. Vous pouvez également définir le chemin vers votre fichier Excel :
    ```python
    EXCEL_FILE = "/chemin/vers/votre/fichier/mes_donnees.xlsx"
    ```
-5. Sauvegardez le fichier et exécutez le script :
+6. Sauvegardez le fichier et exécutez le script :
    ```
    python wherepokemon.py
    ```
