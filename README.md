@@ -10,6 +10,9 @@ Ce projet se compose de deux scripts principaux :
 - **wherepokemon.py**  
   Ce script est un bot Discord qui lit le fichier Excel généré par *extract.py* et répond à la commande slash `/where` en affichant les conditions de spawn d'un Pokémon donné.
 
+🔥UPDATE🔥
+Le bot indique désormais l'endroit optimal où capturer votre pokemon !
+
 ## Fonctionnalités
 
 - **Extraction de spawn**  
