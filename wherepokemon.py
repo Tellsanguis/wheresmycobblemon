@@ -7,31 +7,23 @@ import logging
 import re
 import textwrap
 
-# Configuration du système de journalisation pour suivre l'activité du bot
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler()]
 )
 
-# Récupération des variables d'environnement nécessaires au fonctionnement du bot
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Token d'authentification du bot Discord
-GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))  # ID du serveur Discord
-EXCEL_FILE = "/documents/mes_donnees.xlsx"  # Chemin du fichier Excel contenant les données Pokémon
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
+EXCEL_FILE = "/documents/mes_donnees.xlsx"
 
-# Vérification que l'ID du serveur Discord est configuré
 if GUILD_ID == 0:
     logging.error("❌ DISCORD_GUILD_ID n'est pas défini. Vérifie tes variables d'environnement.")
     exit(1)
 
-# Variable globale pour stocker les données de spawn des Pokémon
 spawn_data = []
 
 def load_spawn_data_from_excel():
-    """
-    Charge les données de spawn des Pokémon depuis le fichier Excel.
-    Les données sont stockées dans la variable globale spawn_data.
-    """
     global spawn_data
     try:
         df = pd.read_excel(EXCEL_FILE)
@@ -42,33 +34,21 @@ def load_spawn_data_from_excel():
         spawn_data = []
 
 def safe_field(val):
-    """
-    Gère de manière sécurisée l'affichage des valeurs des champs.
-    
-    Args:
-        val: Valeur à sécuriser pour l'affichage
-        
-    Returns:
-        Une représentation textuelle sécurisée de la valeur
-    """
     try:
-        # Gestion des valeurs NaN de pandas
         if pd.isna(val):
             return "∅"
     except Exception:
         pass
-    # Conversion des booléens en chaînes de caractères
     if isinstance(val, bool):
         return str(val).lower()
     val_str = str(val)
-    # Remplacement des chaînes vides ou "nan" par un symbole spécial
     if val_str.strip() == "" or val_str.lower() == "nan":
         return "∅"
     return val_str
 
 def split_long_field(label, emoji, value, max_length=1700):
     """
-    Divise un champ trop long en plusieurs parties pour respecter les limites de Discord.
+    Divise un champ trop long en plusieurs parties.
     
     Args:
         label: Le nom du champ
@@ -83,7 +63,7 @@ def split_long_field(label, emoji, value, max_length=1700):
         return [f"{emoji} **{label}** : {value}"]
     
     # Diviser la liste des valeurs (par exemple, liste de biomes)
-    items = [item.strip() for item in value.split(',')]
+    items = [item.strip() for item in value.split('|') if item.strip()]
     
     parts = []
     current_part = []
@@ -94,12 +74,12 @@ def split_long_field(label, emoji, value, max_length=1700):
     for item in items:
         # Tenir compte des préfixes dans le calcul de la longueur
         prefix = base_prefix if not current_part else cont_prefix
-        # +2 pour la virgule et l'espace
-        item_length = len(item) + 2
+        # +2 pour le délimiteur et l'espace
+        item_length = len(item) + 3  # ' | ' est plus long que ', '
         
         # Si ajouter cet élément dépasse la limite, commencer une nouvelle partie
         if current_part and (current_length + item_length + len(prefix) > max_length):
-            parts.append(prefix + ", ".join(current_part))
+            parts.append(prefix + " | ".join(current_part))
             current_part = [item]
             current_length = item_length
         else:
@@ -109,13 +89,14 @@ def split_long_field(label, emoji, value, max_length=1700):
     # Ajouter la dernière partie
     if current_part:
         prefix = base_prefix if not parts else cont_prefix
-        parts.append(prefix + ", ".join(current_part))
+        parts.append(prefix + " | ".join(current_part))
     
     return parts
 
+# Fonction pour diviser un message en parties de taille appropriée
 def prepare_message_parts(fields_output, header, max_length=1900):
     """
-    Prépare les parties du message à envoyer pour respecter les limites de Discord.
+    Prépare les parties du message à envoyer.
     
     Args:
         fields_output: Liste des champs à inclure
@@ -145,41 +126,32 @@ def prepare_message_parts(fields_output, header, max_length=1900):
     
     return message_parts
 
-# Configuration des permissions et fonctionnalités du bot Discord
 intents = discord.Intents.default()
-intents.message_content = True  # Permet au bot de lire le contenu des messages
+intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.tree.command(guild=discord.Object(id=GUILD_ID), name="where", description="Affiche les conditions de spawn d'un Pokémon")
 @app_commands.describe(pokemon="Nom du Pokémon recherché", show_all="Afficher tous les champs (même vides)")
 async def where(interaction: discord.Interaction, pokemon: str, show_all: bool = False):
-    """
-    Commande slash pour afficher les conditions de spawn d'un Pokémon.
-    
-    Args:
-        interaction: L'interaction Discord
-        pokemon: Le nom du Pokémon recherché
-        show_all: Booléen pour afficher tous les champs, même vides
-    """
-    # Recherche du Pokémon dans les données chargées
     results = [entry for entry in spawn_data if safe_field(entry.get("Pokemon")).lower() == pokemon.lower()]
     if not results:
         await interaction.response.send_message(f"❌ Aucune information trouvée pour **{pokemon}**.", ephemeral=True)
         return
     
-    # Répondre d'abord pour éviter le timeout de Discord (3 secondes)
+    # Répondre d'abord pour éviter le timeout
     await interaction.response.send_message(f"Recherche d'informations sur **{pokemon}**...", ephemeral=True)
     
-    # Traiter chaque entrée correspondant au Pokémon (peut être plusieurs)
     for entry_index, entry in enumerate(results):
         header = f"🔍 **Informations sur {safe_field(entry.get('Pokemon'))} (Entrée {entry_index+1}/{len(results)})**\n"
         fields_output = []
         
-        # Définition des champs à afficher avec leurs emojis
+        # Traiter tous les champs réguliers
         field_mapping = [
             ("Rareté", "📌", "Bucket"),
             ("Dimensions", "🌍", "Dimensions"),
+            ("Meilleurs biomes de spawn", "🌟", "Meilleurs biomes de spawn"),  # Ajout du champ
+            ("Nombre de concurrents", "🥇", "Nombre de concurrents"),  # Ajout du champ
             ("Structures", "🏰", "Structures"),
             ("Phase de Lune", "🌙", "Moon Phase"),
             ("Can See Sky", "☀️", "Can See Sky"),
@@ -218,28 +190,32 @@ async def where(interaction: discord.Interaction, pokemon: str, show_all: bool =
         for label, emoji, field_name in field_mapping:
             value = safe_field(entry.get(field_name))
             if show_all or (value != "∅" and value):
-                fields_output.append(f"{emoji} **{label}** : {value}")
+                # Traitement spécial pour les champs qui peuvent être longs
+                if field_name in ["Meilleurs biomes de spawn"] and len(value) > 1700:
+                    biomes_parts = split_long_field(label, emoji, value)
+                    fields_output.extend(biomes_parts)
+                else:
+                    fields_output.append(f"{emoji} **{label}** : {value}")
         
-        # Traitement spécial pour le champ biomes qui peut être très long
+        # Traiter le champ des biomes séparément car il peut être très long
         biomes_value = safe_field(entry.get("Biomes"))
         if show_all or (biomes_value != "∅" and biomes_value):
             biomes_parts = split_long_field("Biomes", "🏞️", biomes_value)
             fields_output.extend(biomes_parts)
         
-        # Message par défaut si aucune information n'est disponible
+        # Si aucun champ n'a de valeur, ajouter un message par défaut
         if not fields_output:
             fields_output.append("Aucune information spécifique n'est disponible pour ce Pokémon.")
         
-        # Préparer les parties du message pour respecter la limite de caractères de Discord
+        # Préparer les parties du message
         all_parts = prepare_message_parts(fields_output, header)
         
-        # Envoyer chaque partie du message
+        # Envoyer chaque partie
         for i, part in enumerate(all_parts):
             part_indicator = f" (Partie {i+1}/{len(all_parts)})" if len(all_parts) > 1 else ""
             try:
                 await interaction.followup.send(part + part_indicator, ephemeral=True)
             except discord.errors.HTTPException as e:
-                # En cas d'erreur, découper davantage le message
                 logging.error(f"Erreur lors de l'envoi du message (longueur: {len(part)}): {e}")
                 # Si le message est encore trop long, le diviser davantage
                 chunks = textwrap.wrap(part, width=1900, replace_whitespace=False, break_long_words=True)
@@ -249,42 +225,22 @@ async def where(interaction: discord.Interaction, pokemon: str, show_all: bool =
 
 @where.autocomplete("pokemon")
 async def pokemon_autocomplete(interaction: discord.Interaction, current: str):
-    """
-    Fonction d'autocomplétion pour la commande where.
-    Suggère des noms de Pokémon basés sur le texte saisi.
-    
-    Args:
-        interaction: L'interaction Discord
-        current: Le texte actuellement saisi par l'utilisateur
-        
-    Returns:
-        Une liste de suggestions pour l'autocomplétion
-    """
-    # Récupérer tous les noms de Pokémon disponibles dans les données
     names = {safe_field(entry.get("Pokemon")) for entry in spawn_data if safe_field(entry.get("Pokemon")) != "∅"}
     names = sorted(names)
-    # Filtrer et limiter les résultats à 25 selon les restrictions de Discord
     return [
         app_commands.Choice(name=name, value=name)
         for name in names if current.lower() in name.lower()
-    ][:25]  # Discord limite à 25 options maximum
+    ][:25]
 
 @bot.event
 async def on_ready():
-    """
-    Fonction appelée lorsque le bot est connecté et prêt.
-    Charge les données et synchronise les commandes slash.
-    """
-    # Charger les données depuis le fichier Excel
     load_spawn_data_from_excel()
     guild = discord.Object(id=GUILD_ID)
     try:
-        # Synchroniser les commandes slash pour qu'elles apparaissent dans Discord
         synced = await bot.tree.sync(guild=guild)
         logging.info(f"{len(synced)} commandes synchronisées sur le serveur {guild.id}.")
     except Exception as e:
         logging.error(f"Erreur de synchronisation des commandes : {e}")
     logging.info(f"✅ Bot connecté en tant que {bot.user}")
 
-# Démarrer le bot avec le token fourni
 bot.run(TOKEN)
