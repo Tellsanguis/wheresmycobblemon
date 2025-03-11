@@ -5,7 +5,7 @@
 Ce projet se compose de deux scripts principaux :
 
 - **extract.py**  
-  Ce script extrait les données de spawn depuis tous les fichiers JSON situés dans les dossiers *spawn_pool* (par exemple dans un dossier global de datapacks) et les exporte dans un fichier Excel. Il peut également fusionner les données supplémentaires provenant d'un tableur du mod Cobblemon (optionnel). Il gère aussi la résolution des tags de biomes en remplaçant les identifiants (par exemple, `#minecraft:is_savanna_plateau`) par la liste des biomes correspondants grâce à un fichier de tags.
+  Ce script extrait les données de spawn depuis tous les fichiers JSON situés dans les dossiers *spawn_pool* (par exemple dans un dossier global de datapacks) et les exporte dans un fichier Excel. Il gère aussi la résolution des tags de biomes en remplaçant les identifiants (par exemple, `#minecraft:is_savanna_plateau`) par la liste des biomes correspondants grâce à un fichier de tags.
 
 - **wherepokemon.py**  
   Ce script est un bot Discord qui lit le fichier Excel généré par *extract.py* et répond à la commande slash `/where` en affichant les conditions de spawn d'un Pokémon donné.
@@ -19,7 +19,6 @@ Ce projet se compose de deux scripts principaux :
     - **Stone Requirements** : recherche de toutes les clés se terminant par `_stone_requirement` pour obtenir le nombre et le type de pierre d'évolution.
     - **Custom Pokemons In Team** : extraction des Pokémon spécifiques à avoir dans l'équipe avec leur nombre requis.
     - Conditions de profondeur (ex. `Min Y` et `Max Y`).
-  - Fusion optionnelle avec un tableur additionnel (ex. `cobblespawn.xlsx`) pour ajouter des données provenant du mod Cobblemon.
   - **Résolution des tags de biomes** en utilisant un fichier de tags au format TXT.
 
 - **Bot Discord**  
@@ -41,7 +40,9 @@ Ce projet se compose de deux scripts principaux :
   - `pandas`
   - `discord.py`
   - `openpyxl`
-- Un fichier Excel de données additionnelles pour le mod Cobblemon (optionnel) (ex. `cobblespawn.xlsx`)
+- Le fichier zip avec les fichiers de configuration du spawn des pokemons de cobblemon (ici, pour la 1.5.2 : https://gitlab.com/cable-mc/cobblemon/-/archive/1.5.2/cobblemon-1.5.2.zip?path=common/src/main/resources/data/cobblemon/spawn_pool_world)
+- Votre dossier de datapacks (global_packs par exemple, celui où vous avez AllTheMons ou autres datapacks ajoutant des pokemons)
+- Vous mettrez votre dossier de datapacks et le contenu du fichier zip dans un même dossier
 - Le fichier de tags des biomes, généré via le mod [TellMe](https://modrinth.com/mod/tellme) avec la commande : /tellme dump to-file ascii-table biomes-with-tags
   Renommez le fichier généré en `biomes_tags.txt` et placez-le dans le même dossier que extract.py.
 
@@ -60,12 +61,12 @@ Pour extraire les données depuis les fichiers JSON et générer un fichier Exce
 
 Exemple :
  ```
-python extract.py /chemin/vers/dossier/globaldatapack --output mes_donnees.xlsx --additional cobblespawn.xlsx
+python extract.py /chemin/vers/dossier/globaldatapack --biome-tags ./biomes_tags.txt --output mes_donnees.xlsx
  ```
 
-    /chemin/vers/dossier/globaldatapack : chemin vers le dossier racine contenant les datapacks.
+    /chemin/vers/dossier/globaldatapack : chemin vers le dossier racine contenant les datapacks et les fichiers JSON de Cobblemon
+    --biome-tags : chemin vers votre fichier biomes_tags.txt
     --output mes_donnees.xlsx : nom du fichier Excel de sortie.
-    --additional cobblespawn.xlsx : (optionnel) chemin vers le tableur additionnel du mod Cobblemon.
 
 **Bot Discord**
 
