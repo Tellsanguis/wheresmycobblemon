@@ -58,6 +58,27 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
  pip install -r requirements.txt
  ```
 
+## Création du bot Discord
+
+Avant d'utiliser le script `wherepokemon.py`, vous devez créer un bot Discord :
+
+1. Rendez-vous sur le [Portail des développeurs Discord](https://discord.com/developers/applications)
+2. Cliquez sur "New Application" et donnez un nom à votre application
+3. Dans le menu de gauche, cliquez sur "Bot"
+4. Cliquez sur "Add Bot" puis confirmez
+5. Sous la section "TOKEN", cliquez sur "Reset Token" puis "Copy" pour copier votre token (gardez-le en lieu sûr, vous en aurez besoin)
+6. Activez les options suivantes :
+   - "MESSAGE CONTENT INTENT" dans la section "Privileged Gateway Intents"
+7. Sauvegardez les modifications
+8. Dans le menu gauche, allez dans "OAuth2" > "URL Generator"
+9. Sélectionnez les scopes "bot" et "applications.commands"
+10. Dans "Bot Permissions", sélectionnez au minimum :
+    - "Read Messages/View Channels"
+    - "Send Messages"
+    - "Use Slash Commands"
+11. Copiez l'URL générée et collez-la dans votre navigateur pour inviter le bot sur votre serveur
+12. Notez l'ID de votre serveur Discord (clic droit sur le serveur > "Copier l'identifiant" si vous avez activé le mode développeur)
+
 ## Utilisation
 **Extraction des Données**
 
@@ -76,22 +97,13 @@ python extract.py /chemin/vers/dossier/globaldatapack --biome-tags ./biomes_tags
 
 Le script wherepokemon.py lit le fichier .xlsx généré et répond à la commande slash `/where`.
 
+### Utilisation avec Docker
+
 Variables importantes à configurer (via variables d'environnement ou directement dans le script) :
 
     DISCORD_BOT_TOKEN : Token de votre bot Discord.
     DISCORD_GUILD_ID : ID de votre serveur Discord (pour synchroniser rapidement la commande).
     EXCEL_FILE : Chemin vers le fichier .xlsx (par défaut /documents/mes_donnees.xlsx).
-
-Exécutez le script :
- ```
-python wherepokemon.py
- ```
-
-La commande `/where` est disponible sur votre serveur et vous permet d'afficher les conditions de spawn pour un Pokémon donné.
-
-## Docker
-
-Un fichier docker-compose.yml est fourni pour exécuter le bot dans un conteneur Docker.
 
 Exemple de docker-compose.yml :
  ```
@@ -116,3 +128,32 @@ Pour lancer le bot via Docker :
  ```
 docker-compose up -d
  ```
+
+### Utilisation sans Docker
+
+Si vous n'utilisez pas Docker, vous devez modifier directement le fichier `wherepokemon.py` pour y ajouter vos informations d'identification :
+
+1. Ouvrez le fichier `wherepokemon.py` dans un éditeur de texte
+2. Localisez les lignes où les variables TOKEN et GUILD_ID sont définies
+3. Remplacez-les par vos propres informations comme suit :
+   ```python
+   # Remplacez ces lignes
+   TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+   GUILD_ID = int(os.getenv("DISCORD_GUILD_ID", "0"))
+   
+   # Par celles-ci
+   TOKEN = "votre_token_discord_ici"  # Collez votre token entre les guillemets
+   GUILD_ID = int("012345678901234567")  # Remplacez par l'ID de votre serveur entre guillemets
+   ```
+4. Vous pouvez également définir le chemin vers votre fichier Excel :
+   ```python
+   EXCEL_FILE = "/chemin/vers/votre/fichier/mes_donnees.xlsx"
+   ```
+5. Sauvegardez le fichier et exécutez le script :
+   ```
+   python wherepokemon.py
+   ```
+
+**Note importante :** Assurez-vous de ne jamais partager ou publier votre fichier contenant le token Discord, car cela pourrait compromettre la sécurité de votre bot.
+
+La commande `/where` sera disponible sur votre serveur et vous permettra d'afficher les conditions de spawn pour un Pokémon donné.
