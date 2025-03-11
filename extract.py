@@ -5,6 +5,7 @@ import pandas as pd
 import argparse
 from openpyxl.styles import Alignment
 import re
+from collections import defaultdict
 
 # Fonction pour formater les valeurs booléennes de façon cohérente
 def format_bool(val):
@@ -17,7 +18,7 @@ def format_bool(val):
 # Fonction pour charger et analyser le fichier biomes_tags.txt
 def load_biome_tags(biome_tags_file):
     tag_to_biomes = {}  # Dictionnaire pour associer chaque tag à une liste de biomes
-    valid_biomes = set()  # Ensemble pour stocker tous les biomes valides
+    valid_biomes = set()  # Ensemble pour stocker tous les biomes valides (Registry names)
     valid_tags = set()    # Ensemble pour stocker tous les tags valides
     
     try:
@@ -40,25 +41,41 @@ def load_biome_tags(biome_tags_file):
                     registry_name = line[registry_col_start:tags_col_start].strip()
                     tags_text = line[tags_col_start:].strip()
                     
-                    # Ajouter le biome à l'ensemble des biomes valides
-                    valid_biomes.add(registry_name)
+                    # Ajouter le biome à l'ensemble des biomes valides (seulement s'il a un nom)
+                    if registry_name:
+                        valid_biomes.add(registry_name)
                     
-                    # Si des tags sont présents
-                    if tags_text:
+                    # Si des tags sont présents et le registry_name est valide
+                    if tags_text and registry_name:
                         # Diviser les tags et les nettoyer
                         tags = [tag.strip() for tag in tags_text.split(',')]
                         
                         # Pour chaque tag, ajouter ce biome à la liste correspondante
                         for tag in tags:
-                            valid_tags.add(tag)
-                            if tag.startswith('#'):
-                                valid_tags.add(tag[1:])  # Version sans #
-                            else:
-                                valid_tags.add('#' + tag)  # Version avec #
+                            if tag:  # Ignorer les tags vides
+                                valid_tags.add(tag)
+                                # Ajouter aussi la version avec/sans # du tag
+                                if tag.startswith('#'):
+                                    valid_tags.add(tag[1:])
+                                else:
+                                    valid_tags.add('#' + tag)
                                 
-                            if tag not in tag_to_biomes:
-                                tag_to_biomes[tag] = []
-                            tag_to_biomes[tag].append(registry_name)
+                                # Normaliser le tag (sans le #)
+                                normalized_tag = tag.lstrip('#')
+                                
+                                # Ajouter le tag avec et sans # comme clés
+                                if normalized_tag not in tag_to_biomes:
+                                    tag_to_biomes[normalized_tag] = []
+                                if tag not in tag_to_biomes:
+                                    tag_to_biomes[tag] = []
+                                
+                                tag_to_biomes[normalized_tag].append(registry_name)
+                                tag_to_biomes[tag].append(registry_name)
+        
+        print(f"Biomes valides chargés: {len(valid_biomes)}")
+        print(f"Tags valides chargés: {len(valid_tags)}")
+        print(f"Associations tag-biomes chargées: {len(tag_to_biomes)}")
+        
     except Exception as e:
         print(f"Erreur lors du chargement du fichier de tags de biomes {biome_tags_file}: {e}")
     
@@ -78,23 +95,22 @@ def resolve_biome_tag(tag, tag_to_biomes, visited_tags=None):
     # Normaliser le format du tag en enlevant le préfixe # si présent
     normalized_tag = tag.lstrip('#')
     
-    # Chercher une correspondance dans notre dictionnaire de tags
-    resolved_biomes = []
-    for db_tag, biomes in tag_to_biomes.items():
-        # Comparer le tag normalisé avec les tags de la base de données
-        if normalized_tag == db_tag or normalized_tag == db_tag.lstrip('#'):
-            resolved_biomes.extend(biomes)
+    # Chercher une correspondance directe dans notre dictionnaire de tags
+    if tag in tag_to_biomes:
+        return tag_to_biomes[tag]
+    if normalized_tag in tag_to_biomes:
+        return tag_to_biomes[normalized_tag]
     
-    # Si aucun biome résolu et le tag commence par "cobblemon:is_", essayer avec "minecraft:is_"
-    if not resolved_biomes and "cobblemon:is_" in normalized_tag:
+    # Si aucune correspondance directe, vérifier si c'est un tag minecraft:is_ ou cobblemon:is_
+    if "cobblemon:is_" in normalized_tag:
         alternate_tag = normalized_tag.replace("cobblemon:is_", "minecraft:is_")
-        
-        # Chercher avec le tag alternatif
-        for db_tag, biomes in tag_to_biomes.items():
-            if alternate_tag == db_tag or alternate_tag == db_tag.lstrip('#'):
-                resolved_biomes.extend(biomes)
+        if alternate_tag in tag_to_biomes:
+            return tag_to_biomes[alternate_tag]
+        if '#' + alternate_tag in tag_to_biomes:
+            return tag_to_biomes['#' + alternate_tag]
     
-    return resolved_biomes
+    # Aucune correspondance trouvée
+    return []
 
 # Fonction pour résoudre tous les tags de biomes dans une chaîne (avec validation stricte)
 def resolve_biome_tags_in_string(biomes_str, tag_to_biomes, valid_biomes, valid_tags):
@@ -106,149 +122,37 @@ def resolve_biome_tags_in_string(biomes_str, tag_to_biomes, valid_biomes, valid_
     all_resolved_biomes = []
     
     for biome in biomes:
+        biome = biome.strip()
+        if not biome:
+            continue
+            
         # Si c'est un tag (commence par # ou contient "is_")
         if biome.startswith('#') or ":is_" in biome:
-            # S'assurer que le biome a le préfixe #
-            if not biome.startswith('#'):
-                biome = '#' + biome
-                
-            # Essayer de résoudre le tag
-            resolved = resolve_biome_tag(biome, tag_to_biomes)
-            if resolved:
-                all_resolved_biomes.extend(resolved)
-            else:
-                # Si le tag concerne cobblemon:is_, essayer de le remplacer par minecraft:is_
-                if "cobblemon:is_" in biome:
-                    minecraft_tag = biome.replace("cobblemon:is_", "minecraft:is_")
+            # S'assurer que le biome a le préfixe # si c'est un tag
+            tag = biome if biome.startswith('#') else '#' + biome
+            normalized_tag = tag.lstrip('#')
+            
+            # Vérifier si c'est un tag valide
+            if tag in valid_tags or normalized_tag in valid_tags:
+                # Essayer de résoudre le tag
+                resolved = resolve_biome_tag(tag, tag_to_biomes)
+                if resolved:
+                    # Ajouter seulement les biomes résolus qui sont valides
+                    all_resolved_biomes.extend([b for b in resolved if b in valid_biomes])
+            elif "cobblemon:is_" in biome:
+                # Essayer avec minecraft:is_ si c'est un tag cobblemon
+                minecraft_tag = biome.replace("cobblemon:is_", "minecraft:is_")
+                if minecraft_tag in valid_tags or minecraft_tag.lstrip('#') in valid_tags:
                     resolved_minecraft = resolve_biome_tag(minecraft_tag, tag_to_biomes)
                     if resolved_minecraft:
-                        all_resolved_biomes.extend(resolved_minecraft)
-                # Si c'est un tag non résolu qui n'est pas reconnu, l'ignorer
+                        all_resolved_biomes.extend([b for b in resolved_minecraft if b in valid_biomes])
         else:
-            # Ce n'est PAS un tag mais un biome direct (minecraft:taiga, etc.)
-            # Vérifier s'il est dans valid_biomes ou s'il s'agit d'un biome standard
-            if biome in valid_biomes or "minecraft:" in biome:
+            # C'est un biome direct, vérifier s'il est valide
+            if biome in valid_biomes:
                 all_resolved_biomes.append(biome)
     
-    # Éliminer les doublons et joindre les biomes en une chaîne
-    return ', '.join(sorted(set(all_resolved_biomes)))
-
-# Fonction pour résoudre les tags de biomes dans une chaîne sans filtrer les biomes inconnus
-# Utilisée pour le fichier additionnel uniquement
-def resolve_biome_tags_in_string_lenient(biomes_str, tag_to_biomes):
-    if not biomes_str:
-        return ""
-    
-    # Diviser la chaîne en biomes individuels
-    biomes = [b.strip() for b in biomes_str.split(',')]
-    all_resolved_biomes = []
-    preserved_biomes = []
-    
-    for biome in biomes:
-        # Si c'est un tag (commence par # ou contient "is_")
-        if biome.startswith('#') or ":is_" in biome:
-            # S'assurer que le biome a le préfixe #
-            if not biome.startswith('#'):
-                biome = '#' + biome
-                
-            # Essayer de résoudre le tag
-            resolved = resolve_biome_tag(biome, tag_to_biomes)
-            if resolved:
-                all_resolved_biomes.extend(resolved)
-            else:
-                # Si le tag concerne cobblemon:is_, essayer de le remplacer par minecraft:is_
-                if "cobblemon:is_" in biome:
-                    minecraft_tag = biome.replace("cobblemon:is_", "minecraft:is_")
-                    resolved_minecraft = resolve_biome_tag(minecraft_tag, tag_to_biomes)
-                    if resolved_minecraft:
-                        all_resolved_biomes.extend(resolved_minecraft)
-                    else:
-                        # Garder le tag original s'il ne peut pas être résolu
-                        preserved_biomes.append(biome)
-                else:
-                    # Conserver tous les autres tags non résolus
-                    preserved_biomes.append(biome)
-        else:
-            # Ce n'est pas un tag, le conserver tel quel
-            preserved_biomes.append(biome)
-    
-    # Combiner les biomes résolus et ceux conservés
-    combined_biomes = all_resolved_biomes + preserved_biomes
-    
-    # Éliminer les doublons et joindre les biomes en une chaîne
-    return ', '.join(sorted(set(combined_biomes)))
-
-# Fonction pour analyser les conditions spéciales de spawn
-def parse_special_conditions(special_conditions):
-    # Dictionnaire pour stocker les informations extraites
-    extracted_info = {
-        "Needed Nearby Blocks": [],
-        "Needed Base Blocks": [],
-        "Moon Phase": "",
-        "Min X": "",
-        "Min Y": "",
-        "Min Z": "",
-        "Max X": "",
-        "Max Y": "",
-        "Max Z": "",
-        "Structures": [],
-        "Min Light": "",
-        "Max Light": ""
-    }
-    
-    if not special_conditions or not isinstance(special_conditions, str):
-        return extracted_info
-    
-    # Traitement des blocs à proximité (sans "on" avant)
-    nearby_blocks = re.findall(r'(?<!on\s)minecraft:[a-z_]+', special_conditions)
-    for block in nearby_blocks:
-        # Éviter de dupliquer avec les blocs de base
-        if f"on {block}" not in special_conditions:
-            extracted_info["Needed Nearby Blocks"].append(block)
-    
-    # Traitement des blocs de base
-    base_blocks = re.findall(r'on\s(minecraft:[a-z_]+)', special_conditions)
-    extracted_info["Needed Base Blocks"] = base_blocks
-    
-    # Phase de lune
-    moon_phase_match = re.search(r'moonPhase\s*=\s*(\d+)', special_conditions)
-    if moon_phase_match:
-        extracted_info["Moon Phase"] = moon_phase_match.group(1)
-    
-    # Coordonnées min/max - Correction du formatage des noms de colonnes
-    coord_mapping = {
-        "minX": "Min X", 
-        "minY": "Min Y", 
-        "minZ": "Min Z", 
-        "maxX": "Max X", 
-        "maxY": "Max Y", 
-        "maxZ": "Max Z"
-    }
-    
-    for coord, column_name in coord_mapping.items():
-        coord_match = re.search(rf'{coord}\s*=\s*(-?\d+)', special_conditions)
-        if coord_match:
-            extracted_info[column_name] = coord_match.group(1)
-    
-    # Structures
-    structures = re.findall(r'structure:([a-z_:]+)', special_conditions)
-    extracted_info["Structures"] = structures
-    
-    # Lumière min/max
-    min_light_match = re.search(r'minLight\s*=\s*(\d+)', special_conditions)
-    if min_light_match:
-        extracted_info["Min Light"] = min_light_match.group(1)
-    
-    max_light_match = re.search(r'maxLight\s*=\s*(\d+)', special_conditions)
-    if max_light_match:
-        extracted_info["Max Light"] = max_light_match.group(1)
-    
-    # Convertir les listes en chaînes
-    for key in ["Needed Nearby Blocks", "Needed Base Blocks", "Structures"]:
-        if extracted_info[key]:
-            extracted_info[key] = ", ".join(extracted_info[key])
-    
-    return extracted_info
+    # Éliminer les doublons et joindre les biomes en une chaîne avec | comme séparateur
+    return ' | '.join(sorted(set(all_resolved_biomes)))
 
 # Extrait les données de spawn de Pokémon à partir d'un fichier JSON
 def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
@@ -267,14 +171,14 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                 condition = spawn.get("condition", {})
                 
                 # Extrait les différentes conditions de spawn
-                dimensions = ", ".join(condition.get("dimensions", []))
+                dimensions = " | ".join(condition.get("dimensions", []))
                 
                 # Récupérer la liste des biomes et résoudre les tags
                 biomes_list = condition.get("biomes", [])
                 biomes_str = ", ".join(biomes_list)
                 biomes = resolve_biome_tags_in_string(biomes_str, tag_to_biomes, valid_biomes, valid_tags)
                 
-                structures = ", ".join(condition.get("structures", []))
+                structures = " | ".join(condition.get("structures", []))
                 moon_phase = condition.get("moonPhase", "")
                 can_see_sky = format_bool(condition.get("canSeeSky", ""))
                 
@@ -299,7 +203,7 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                 is_slime_chunk = format_bool(condition.get("isSlimeChunk", ""))
                 
                 # Conditions d'étiquettes
-                labels = ", ".join(condition.get("labels", []))
+                labels = " | ".join(condition.get("labels", []))
                 label_mode = condition.get("labelMode", "")
                 
                 # Dimensions physiques
@@ -309,8 +213,8 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                 max_height = condition.get("maxHeight", "")
                 
                 # Blocs environnants nécessaires
-                needed_nearby_blocks = ", ".join(condition.get("neededNearbyBlocks", []))
-                needed_base_blocks = ", ".join(condition.get("neededBaseBlocks", []))
+                needed_nearby_blocks = " | ".join(condition.get("neededNearbyBlocks", []))
+                needed_base_blocks = " | ".join(condition.get("neededBaseBlocks", []))
                 
                 # Conditions de profondeur et de fluide
                 min_depth = condition.get("minDepth", "")
@@ -325,7 +229,7 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                     if key.endswith("_stone_requirement"):
                         stone_type = key.replace("_stone_requirement", "")
                         stone_requirements.append(f"{stone_type}: {value}")
-                stone_requirements_str = ", ".join(stone_requirements)
+                stone_requirements_str = " | ".join(stone_requirements)
                 
                 # Traitement des conditions d'équipe Pokémon
                 custom_team = ""
@@ -337,7 +241,7 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                         count = entry.get("count", "")
                         if species:
                             formatted_team.append(f"{species}: {count}")
-                    custom_team = ", ".join(formatted_team)
+                    custom_team = " | ".join(formatted_team)
                 
                 # Ajoute toutes les données extraites à la liste des lignes
                 rows.append({
@@ -382,14 +286,143 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
         print(f"Erreur lors du traitement de {json_file_path}: {e}")
     return rows
 
+# Fonction pour déterminer les meilleurs biomes de spawn pour chaque Pokémon
+def determine_best_spawn_biomes(df):
+    # Fonction auxiliaire pour diviser correctement une chaîne de biomes
+    def split_biomes(biomes_str):
+        if not biomes_str or not isinstance(biomes_str, str):
+            return set()
+        # Diviser la chaîne en biomes individuels en tenant compte des séparateurs
+        return set(b.strip() for b in biomes_str.split('|') if b.strip())
+    
+    # Créer un dictionnaire pour stocker les Pokémon par bucket
+    pokemon_by_bucket = defaultdict(list)
+    for _, row in df.iterrows():
+        if row["Bucket"] and row["Pokemon"]:
+            # Créer un dictionnaire avec toutes les informations nécessaires pour chaque Pokémon
+            pokemon_info = {
+                "pokemon": row["Pokemon"],  # Utiliser le nom complet directement
+                "biomes": split_biomes(row["Biomes"]),
+                "key_item": row["Key Item"],
+                "needed_nearby_blocks": split_biomes(row["Needed Nearby Blocks"]),
+                "needed_base_blocks": split_biomes(row["Needed Base Blocks"]),
+                "stone_requirements": row["Stone Requirements"],
+                "custom_pokemons_in_team": row["Custom Pokemons In Team"]
+            }
+            pokemon_by_bucket[row["Bucket"]].append(pokemon_info)
+    
+    # Le reste de la fonction reste identique, mais on utilise pokemon_info["pokemon"] directement
+    # au lieu de pokemon_info["base_name"] pour les comparaisons
+    
+    # Dictionnaire pour stocker les biomes et le nombre de concurrents pour chaque Pokémon
+    pokemon_biome_competitors = defaultdict(lambda: defaultdict(int))
+    
+    # Pour chaque bucket, calculer les concurrents par biome pour chaque Pokémon
+    for bucket, pokemon_list in pokemon_by_bucket.items():
+        for pokemon_info in pokemon_list:
+            pokemon = pokemon_info["pokemon"]
+            pokemon_biomes = pokemon_info["biomes"]
+            
+            # Si le Pokémon n'a pas de biomes spécifiés, passer au suivant
+            if not pokemon_biomes:
+                continue
+            
+            # Pour chaque biome de ce Pokémon, trouver les concurrents
+            for biome in pokemon_biomes:
+                if not biome:  # Ignorer les biomes vides
+                    continue
+                
+                # Ensemble pour stocker les noms uniques des concurrents dans ce biome
+                unique_competitors = set()
+                
+                # Vérifier chaque autre Pokémon dans le bucket
+                for other_pokemon in pokemon_list:
+                    # Ne pas compter le Pokémon lui-même
+                    if other_pokemon["pokemon"] != pokemon:
+                        # Vérifier si l'autre Pokémon peut apparaître dans ce biome
+                        if biome in other_pokemon["biomes"]:
+                            # Vérifier les conditions supplémentaires
+                            
+                            # Condition 1: Key Item
+                            key_item_compatible = (
+                                not pokemon_info["key_item"] or
+                                not other_pokemon["key_item"] or
+                                pokemon_info["key_item"] == other_pokemon["key_item"]
+                            )
+                            
+                            # Condition 2: Needed Nearby Blocks
+                            nearby_blocks_compatible = (
+                                not pokemon_info["needed_nearby_blocks"] or
+                                not other_pokemon["needed_nearby_blocks"] or
+                                pokemon_info["needed_nearby_blocks"] == other_pokemon["needed_nearby_blocks"]
+                            )
+                            
+                            # Condition 3: Needed Base Blocks
+                            base_blocks_compatible = (
+                                not pokemon_info["needed_base_blocks"] or
+                                not other_pokemon["needed_base_blocks"] or
+                                pokemon_info["needed_base_blocks"] == other_pokemon["needed_base_blocks"]
+                            )
+                            
+                            # Condition 4: Stone Requirements
+                            stone_requirements_compatible = (
+                                not pokemon_info["stone_requirements"] or
+                                not other_pokemon["stone_requirements"] or
+                                pokemon_info["stone_requirements"] == other_pokemon["stone_requirements"]
+                            )
+                            
+                            # Condition 5: Custom Pokemons In Team
+                            custom_team_compatible = (
+                                not pokemon_info["custom_pokemons_in_team"] or
+                                not other_pokemon["custom_pokemons_in_team"] or
+                                pokemon_info["custom_pokemons_in_team"] == other_pokemon["custom_pokemons_in_team"]
+                            )
+                            
+                            # Si toutes les conditions sont compatibles, ajouter comme concurrent
+                            if (key_item_compatible and nearby_blocks_compatible and 
+                                base_blocks_compatible and stone_requirements_compatible and 
+                                custom_team_compatible):
+                                
+                                # Ajouter le nom du Pokémon à l'ensemble des concurrents uniques
+                                unique_competitors.add(other_pokemon["pokemon"])
+                
+                # Stocker le nombre de concurrents uniques pour ce Pokémon dans ce biome
+                pokemon_biome_competitors[pokemon][biome] = len(unique_competitors)
+    
+    # Déterminer les meilleurs biomes pour chaque Pokémon (ceux avec le moins de concurrents)
+    best_spawn_biomes = {}
+    competitor_counts = {}  # Nouveau dictionnaire pour stocker le nombre de concurrents
+    
+    for pokemon, biome_competitors in pokemon_biome_competitors.items():
+        if not biome_competitors:  # Si aucun biome concurrent, passer au suivant
+            best_spawn_biomes[pokemon] = ""
+            competitor_counts[pokemon] = 0
+            continue
+        
+        # Trouver le nombre minimum de concurrents
+        min_competitors = min(biome_competitors.values()) if biome_competitors.values() else 0
+        
+        # Stocker le nombre de concurrents pour ce Pokémon
+        competitor_counts[pokemon] = min_competitors
+        
+        # Sélectionner tous les biomes ayant ce nombre minimum de concurrents
+        best_biomes = [biome for biome, count in biome_competitors.items() if count == min_competitors]
+        
+        # Trier les biomes pour une sortie cohérente
+        best_biomes.sort()
+        
+        # Stocker les meilleurs biomes pour ce Pokémon avec le séparateur pour Excel
+        best_spawn_biomes[pokemon] = " | ".join(best_biomes)
+    
+    return best_spawn_biomes, competitor_counts
+
 def main():
     # Configuration du parseur d'arguments pour les options en ligne de commande
     parser = argparse.ArgumentParser(
-        description="Extrait les données de spawn depuis les fichiers JSON dans 'spawn_pool_world' et ajoute (en option) les données d'un tableur additionnel."
+        description="Extrait les données de spawn depuis les fichiers JSON dans 'spawn_pool_world'"
     )
     parser.add_argument("target_dir", help="Dossier cible où chercher les fichiers JSON")
     parser.add_argument("--output", default="spawn_data.xlsx", help="Nom du fichier Excel de sortie")
-    parser.add_argument("--additional", help="Chemin vers le fichier Excel additionnel (Cobblemon) (colonnes B:S)")
     parser.add_argument("--biome-tags", default="biomes_tags.txt", help="Chemin vers le fichier de tags de biomes")
     args = parser.parse_args()
 
@@ -406,7 +439,8 @@ def main():
         "Is Raining", "Is Thundering", "Is Slime Chunk", "Labels", "Label Mode",
         "Min Width", "Max Width", "Min Height", "Max Height",
         "Needed Nearby Blocks", "Needed Base Blocks", "Min Depth", "Max Depth",
-        "Fluid Is Source", "Fluid Block", "Key Item", "Stone Requirements", "Custom Pokemons In Team"
+        "Fluid Is Source", "Fluid Block", "Key Item", "Stone Requirements", "Custom Pokemons In Team",
+        "Meilleurs biomes de spawn", "Nombre de concurrents"  # Ajout de la colonne nombre de concurrents
     ]
     
     # Parcours récursif des répertoires pour trouver les fichiers JSON
@@ -420,85 +454,33 @@ def main():
                     all_rows.extend(rows)
     
     # Création du DataFrame pandas avec les données extraites
-    df_config = pd.DataFrame(all_rows, columns=base_columns)
+    df_partial = pd.DataFrame(all_rows)
     
-    # Traitement du fichier Excel additionnel si spécifié
-    if args.additional:
-        try:
-            # Lecture du fichier Excel additionnel, y compris la colonne O (conditions spéciales)
-            df_additional = pd.read_excel(args.additional, usecols="B:S")
-            print("Colonnes du tableur additionnel lues :", df_additional.columns.tolist())
-            
-            # Mappage des noms de colonnes pour correspondre à notre format
-            mapping = {
-                "Pokémon": "Pokemon",
-                "Bucket": "Bucket",
-                "Biomes": "Biomes",
-                "Time": "Time Range",
-                "skyLightMin": "Min Sky Light",
-                "skyLightMax": "Max Sky Light",
-                "canSeeSky": "Can See Sky"
-            }
-            df_additional.rename(columns=mapping, inplace=True)
-            
-            # Identifier la colonne des conditions spéciales (colonne O)
-            special_conditions_col = None
-            for col in df_additional.columns:
-                if 'condition' in col.lower() or df_additional.columns.get_loc(col) == 14:  # 14 est l'index de la colonne O (0-based)
-                    special_conditions_col = col
-                    print(f"Colonne des conditions spéciales identifiée : {col}")
-                    break
-            
-            # Sélection des colonnes qui nous intéressent
-            cols_to_keep = ["Pokemon"] + [v for k, v in mapping.items() if v != "Pokemon"]
-            if special_conditions_col:
-                cols_to_keep.append(special_conditions_col)
-            df_additional = df_additional[[col for col in cols_to_keep if col in df_additional.columns]]
-            
-            # Transformation des données additionnelles au format attendu
-            additional_rows = []
-            for idx, row in df_additional.iterrows():
-                new_row = {col: "" for col in base_columns}
-                
-                # Traiter les colonnes standards
-                for col in [c for c in cols_to_keep if c != special_conditions_col]:
-                    if col in row and pd.notna(row[col]):
-                        value = row[col]
-                        # Pour la colonne "Biomes", utiliser la version permissive qui ne filtre pas les biomes inconnus
-                        if col == "Biomes" and isinstance(value, str):
-                            value = resolve_biome_tags_in_string_lenient(value, tag_to_biomes)
-                        new_row[col] = value
-                
-                # Traiter les conditions spéciales
-                if special_conditions_col and pd.notna(row[special_conditions_col]):
-                    special_conditions = row[special_conditions_col]
-                    parsed_conditions = parse_special_conditions(special_conditions)
-                    
-                    # Intégrer les conditions extraites dans les données
-                    for field, value in parsed_conditions.items():
-                        if value:  # Ne pas écraser les champs existants si la valeur est vide
-                            # Si le champ existe déjà et n'est pas vide, fusionner les valeurs
-                            if new_row[field] and isinstance(value, str) and "," in value:
-                                existing_values = set(new_row[field].split(", "))
-                                new_values = set(value.split(", "))
-                                combined = existing_values.union(new_values)
-                                new_row[field] = ", ".join(sorted(combined))
-                            else:
-                                new_row[field] = value
-                
-                additional_rows.append(new_row)
-            df_additional_transformed = pd.DataFrame(additional_rows, columns=base_columns)
-            
-            # Concaténation des données extraites et additionnelles
-            df_combined = pd.concat([df_config, df_additional_transformed], ignore_index=True)
-        except Exception as e:
-            print(f"Erreur lors de la lecture du fichier additionnel {args.additional}: {e}")
-            df_combined = df_config
-    else:
-        df_combined = df_config
+    # S'assurer que les colonnes nécessaires existent
+    for col in base_columns:
+        if col not in df_partial.columns and col not in ["Meilleurs biomes de spawn", "Nombre de concurrents"]:
+            df_partial[col] = ""
     
-    # DataFrame final avec toutes les colonnes
-    df_final = df_combined
+    # Déterminer les meilleurs biomes de spawn pour chaque Pokémon
+    best_spawn_biomes, competitor_counts = determine_best_spawn_biomes(df_partial)
+    
+    # Ajouter la colonne des meilleurs biomes de spawn au DataFrame
+    df_partial["Meilleurs biomes de spawn"] = df_partial["Pokemon"].map(
+        lambda x: best_spawn_biomes.get(x, "")
+    )
+    
+    # Ajouter la colonne du nombre de concurrents au DataFrame
+    df_partial["Nombre de concurrents"] = df_partial["Pokemon"].map(
+        lambda x: competitor_counts.get(x, "")
+    )
+    
+    # S'assurer que toutes les colonnes requises sont présentes
+    for col in base_columns:
+        if col not in df_partial.columns:
+            df_partial[col] = ""
+    
+    # Créer le DataFrame final avec les colonnes dans l'ordre souhaité
+    df_final = df_partial[base_columns]
     
     # Écriture des données dans un fichier Excel avec formatage
     with pd.ExcelWriter(args.output, engine='openpyxl') as writer:
