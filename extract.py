@@ -286,7 +286,7 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
         print(f"Erreur lors du traitement de {json_file_path}: {e}")
     return rows
 
-# Fonction pour déterminer les meilleurs biomes de spawn pour chaque Pokémon
+# Fonction modifiée pour déterminer les meilleurs biomes de spawn pour chaque entrée de Pokémon
 def determine_best_spawn_biomes(df):
     # Fonction auxiliaire pour diviser correctement une chaîne de biomes
     def split_biomes(biomes_str):
@@ -295,32 +295,36 @@ def determine_best_spawn_biomes(df):
         # Diviser la chaîne en biomes individuels en tenant compte des séparateurs
         return set(b.strip() for b in biomes_str.split('|') if b.strip())
     
+    # Ajouter un identifiant unique pour chaque entrée
+    df['entry_id'] = range(len(df))
+    
     # Créer un dictionnaire pour stocker les Pokémon par bucket
     pokemon_by_bucket = defaultdict(list)
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         if row["Bucket"] and row["Pokemon"]:
-            # Créer un dictionnaire avec toutes les informations nécessaires pour chaque Pokémon
+            # Créer un identifiant unique pour cette entrée de Pokémon
+            unique_id = f"{row['Pokemon']}_{idx}"
+            
             pokemon_info = {
-                "pokemon": row["Pokemon"],  # Utiliser le nom complet directement
+                "pokemon": row["Pokemon"],
+                "unique_id": unique_id,  # Ajouter l'ID unique
                 "biomes": split_biomes(row["Biomes"]),
                 "key_item": row["Key Item"],
                 "needed_nearby_blocks": split_biomes(row["Needed Nearby Blocks"]),
                 "needed_base_blocks": split_biomes(row["Needed Base Blocks"]),
                 "stone_requirements": row["Stone Requirements"],
-                "custom_pokemons_in_team": row["Custom Pokemons In Team"]
+                "custom_pokemons_in_team": row["Custom Pokemons In Team"],
+                "entry_id": idx  # Garder l'ID d'entrée original
             }
             pokemon_by_bucket[row["Bucket"]].append(pokemon_info)
     
-    # Le reste de la fonction reste identique, mais on utilise pokemon_info["pokemon"] directement
-    # au lieu de pokemon_info["base_name"] pour les comparaisons
-    
-    # Dictionnaire pour stocker les biomes et le nombre de concurrents pour chaque Pokémon
+    # Dictionnaire pour stocker les biomes et le nombre de concurrents pour chaque entrée de Pokémon
     pokemon_biome_competitors = defaultdict(lambda: defaultdict(int))
     
-    # Pour chaque bucket, calculer les concurrents par biome pour chaque Pokémon
+    # Pour chaque bucket, calculer les concurrents par biome pour chaque entrée de Pokémon
     for bucket, pokemon_list in pokemon_by_bucket.items():
         for pokemon_info in pokemon_list:
-            pokemon = pokemon_info["pokemon"]
+            unique_id = pokemon_info["unique_id"]
             pokemon_biomes = pokemon_info["biomes"]
             
             # Si le Pokémon n'a pas de biomes spécifiés, passer au suivant
@@ -337,8 +341,8 @@ def determine_best_spawn_biomes(df):
                 
                 # Vérifier chaque autre Pokémon dans le bucket
                 for other_pokemon in pokemon_list:
-                    # Ne pas compter le Pokémon lui-même
-                    if other_pokemon["pokemon"] != pokemon:
+                    # Ne pas compter l'entrée elle-même
+                    if other_pokemon["unique_id"] != unique_id:
                         # Vérifier si l'autre Pokémon peut apparaître dans ce biome
                         if biome in other_pokemon["biomes"]:
                             # Vérifier les conditions supplémentaires
@@ -386,24 +390,30 @@ def determine_best_spawn_biomes(df):
                                 # Ajouter le nom du Pokémon à l'ensemble des concurrents uniques
                                 unique_competitors.add(other_pokemon["pokemon"])
                 
-                # Stocker le nombre de concurrents uniques pour ce Pokémon dans ce biome
-                pokemon_biome_competitors[pokemon][biome] = len(unique_competitors)
+                # Stocker le nombre de concurrents uniques pour cette entrée de Pokémon dans ce biome
+                pokemon_biome_competitors[unique_id][biome] = len(unique_competitors)
     
-    # Déterminer les meilleurs biomes pour chaque Pokémon (ceux avec le moins de concurrents)
+    # Déterminer les meilleurs biomes pour chaque entrée de Pokémon (ceux avec le moins de concurrents)
     best_spawn_biomes = {}
-    competitor_counts = {}  # Nouveau dictionnaire pour stocker le nombre de concurrents
+    competitor_counts = {}
+    entry_id_to_unique_id = {}
     
-    for pokemon, biome_competitors in pokemon_biome_competitors.items():
+    # Créer un mappage de entry_id vers unique_id
+    for bucket_pokemons in pokemon_by_bucket.values():
+        for pokemon_info in bucket_pokemons:
+            entry_id_to_unique_id[pokemon_info["entry_id"]] = pokemon_info["unique_id"]
+    
+    for unique_id, biome_competitors in pokemon_biome_competitors.items():
         if not biome_competitors:  # Si aucun biome concurrent, passer au suivant
-            best_spawn_biomes[pokemon] = ""
-            competitor_counts[pokemon] = 0
+            best_spawn_biomes[unique_id] = ""
+            competitor_counts[unique_id] = 0
             continue
         
         # Trouver le nombre minimum de concurrents
         min_competitors = min(biome_competitors.values()) if biome_competitors.values() else 0
         
-        # Stocker le nombre de concurrents pour ce Pokémon
-        competitor_counts[pokemon] = min_competitors
+        # Stocker le nombre de concurrents pour cette entrée de Pokémon
+        competitor_counts[unique_id] = min_competitors
         
         # Sélectionner tous les biomes ayant ce nombre minimum de concurrents
         best_biomes = [biome for biome, count in biome_competitors.items() if count == min_competitors]
@@ -411,10 +421,10 @@ def determine_best_spawn_biomes(df):
         # Trier les biomes pour une sortie cohérente
         best_biomes.sort()
         
-        # Stocker les meilleurs biomes pour ce Pokémon avec le séparateur pour Excel
-        best_spawn_biomes[pokemon] = " | ".join(best_biomes)
+        # Stocker les meilleurs biomes pour cette entrée de Pokémon avec le séparateur
+        best_spawn_biomes[unique_id] = " | ".join(best_biomes)
     
-    return best_spawn_biomes, competitor_counts
+    return best_spawn_biomes, competitor_counts, entry_id_to_unique_id
 
 def main():
     # Configuration du parseur d'arguments pour les options en ligne de commande
@@ -461,18 +471,19 @@ def main():
         if col not in df_partial.columns and col not in ["Meilleurs biomes de spawn", "Nombre de concurrents"]:
             df_partial[col] = ""
     
-    # Déterminer les meilleurs biomes de spawn pour chaque Pokémon
-    best_spawn_biomes, competitor_counts = determine_best_spawn_biomes(df_partial)
+    # Déterminer les meilleurs biomes de spawn pour chaque entrée de Pokémon
+    best_spawn_biomes, competitor_counts, entry_id_to_unique_id = determine_best_spawn_biomes(df_partial)
     
-    # Ajouter la colonne des meilleurs biomes de spawn au DataFrame
-    df_partial["Meilleurs biomes de spawn"] = df_partial["Pokemon"].map(
-        lambda x: best_spawn_biomes.get(x, "")
-    )
+    # Ajouter les colonnes pour les meilleurs biomes et le nombre de concurrents
+    df_partial["Meilleurs biomes de spawn"] = ""
+    df_partial["Nombre de concurrents"] = ""
     
-    # Ajouter la colonne du nombre de concurrents au DataFrame
-    df_partial["Nombre de concurrents"] = df_partial["Pokemon"].map(
-        lambda x: competitor_counts.get(x, "")
-    )
+    # Remplir les colonnes pour chaque entrée
+    for idx, row in df_partial.iterrows():
+        unique_id = entry_id_to_unique_id.get(idx)
+        if unique_id:
+            df_partial.at[idx, "Meilleurs biomes de spawn"] = best_spawn_biomes.get(unique_id, "")
+            df_partial.at[idx, "Nombre de concurrents"] = competitor_counts.get(unique_id, "")
     
     # S'assurer que toutes les colonnes requises sont présentes
     for col in base_columns:
