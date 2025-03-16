@@ -181,6 +181,7 @@ async def where(interaction: discord.Interaction, pokemon: str, show_all: bool =
             ("Max Depth", "⚓", "Max Depth"),
             ("Fluid Is Source", "🔄", "Fluid Is Source"),
             ("Fluid Block", "🌊", "Fluid Block"),
+            ("Contexte", "🧭", "Contexte"),
             ("Key Item", "🔑", "Key Item"),
             ("Stone Requirements", "🪨", "Stone Requirements"),
             ("Custom Pokemons In Team", "👥", "Custom Pokemons In Team"),
