@@ -7,6 +7,317 @@ from openpyxl.styles import Alignment
 import re
 from collections import defaultdict
 
+# Dictionnaire pour stocker les informations de preset
+PRESET_DEFINITIONS = {
+    "ancient_city": {
+        "condition": {
+            "structures": [
+                "minecraft:ancient_city"
+            ],
+            "maxY": 62,
+            "neededNearbyBlocks": [
+                "#cobblemon:ancient_city_blocks"
+            ]
+        }
+    },
+    "derelict": {
+        "condition": {
+            "canSeeSky": False,
+            "maxLight": 0
+        },
+        "anticondition": {
+            "neededBaseBlocks": [
+                "#cobblemon:natural"
+            ]
+        }
+    },
+    "desert_pyramid": {
+        "condition": {
+            "structures": [
+                "minecraft:desert_pyramid"
+            ],
+            "minY": 62,
+            "neededNearbyBlocks": [
+                "#cobblemon:desert_pyramid_blocks"
+            ]
+        },
+        "anticondition": {
+            "neededBaseBlocks": [
+                "minecraft:blue_terracotta",
+                "minecraft:orange_terracotta"
+            ]
+        }
+    },
+    "end_city": {
+        "condition": {
+            "structures": [
+                "minecraft:end_city"
+            ],
+            "neededBaseBlocks": [
+                "minecraft:end_stone_bricks",
+                "minecraft:purpur_block",
+                "minecraft:purpur_pillar"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:end_city_blocks"
+            ]
+        }
+    },
+    "foliage": {
+        "condition": {
+            "neededNearbyBlocks": [
+                "#minecraft:leaves",
+                "#c:leaves"
+            ]
+        }
+    },
+    "illager_structures": {
+        "condition": {
+            "structures": [
+                "minecraft:pillager_outpost",
+                "minecraft:swamp_hut",
+                "minecraft:mansion"
+            ],
+            "minY": 62
+        }
+    },
+    "jungle_pyramid": {
+        "condition": {
+            "structures": [
+                "minecraft:jungle_pyramid"
+            ],
+            "minY": 62,
+            "neededBaseBlocks": [
+                "minecraft:cobblestone",
+                "#minecraft:mossy_cobblestone"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:jungle_pyramid_blocks"
+            ]
+        }
+    },
+    "lava": {
+        "condition": {
+            "fluid": "#minecraft:lava"
+        }
+    },
+    "mansion": {
+        "condition": {
+            "structures": [
+                "minecraft:mansion"
+            ],
+            "minY": 62,
+            "neededBaseBlocks": [
+                "minecraft:birch_planks",
+                "minecraft:double_smooth_stone_slab",
+                "minecraft:oak_planks",
+                "minecraft:polished_andesite",
+                "#minecraft:wool",
+                "#minecraft:wool_carpets"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:mansion_blocks"
+            ]
+        }
+    },
+    "natural": {
+        "condition": {
+            "neededBaseBlocks": [
+                "#cobblemon:natural"
+            ]
+        },
+        "anticondition": {
+            "neededBaseBlocks": [
+                "minecraft:farmland"
+            ]
+        }
+    },
+    "nether_fossil": {
+        "condition": {
+            "structures": [
+                "minecraft:nether_fossil"
+            ],
+            "neededNearbyBlocks": [
+                "minecraft:bone_block"
+            ]
+        }
+    },
+    "nether_structures": {
+        "condition": {
+            "structures": [
+                "minecraft:bastion_remnant",
+                "minecraft:fortress"
+            ],
+            "neededBaseBlocks": [
+                "minecraft:chiseled_polished_blackstone",
+                "minecraft:cracked_polished_blackstone_bricks",
+                "minecraft:gilded_blackstone",
+                "minecraft:nether_bricks",
+                "minecraft:polished_basalt",
+                "minecraft:polished_blackstone_bricks"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:nether_structure_blocks"
+            ]
+        }
+    },
+    "ocean_monument": {
+        "condition": {
+            "structures": [
+                "minecraft:monument"
+            ],
+            "maxY": 62
+        }
+    },
+    "ocean_ruins": {
+        "condition": {
+            "structures": [
+                "#minecraft:ocean_ruin"
+            ],
+            "maxY": 62,
+            "neededNearbyBlocks": [
+                "#cobblemon:ocean_ruin_blocks"
+            ]
+        }
+    },
+    "pillager_outpost": {
+        "condition": {
+            "structures": [
+                "minecraft:pillager_outpost"
+            ],
+            "minY": 62,
+            "neededNearbyBlocks": [
+                "#cobblemon:pillager_outpost_blocks"
+            ]
+        }
+    },
+    "redstone": {
+        "condition": {
+            "neededNearbyBlocks": [
+                "#minecraft:redstone_ores",
+                "#cobblemon:redstone_blocks",
+                "#c:redstone_ores"
+            ]
+        },
+        "anticondition": {
+            "neededBaseBlocks": [
+                "#cobblemon:redstone_blocks"
+            ]
+        }
+    },
+    "ruined_portal": {
+        "condition": {
+            "structures": [
+                "#minecraft:ruined_portal"
+            ],
+            "neededNearbyBlocks": [
+                "ruined_portal_blocks"
+            ]
+        }
+    },
+    "salt": {
+        "condition": {
+            "biomes": [
+                "biomesoplenty:hot_springs",
+                "biomesoplenty:wasteland",
+                "biomesoplenty:wasteland_steppe",
+                "terralith:amethyst_canyon",
+                "terralith:amethyst_rainforest",
+                "terralith:skylands_winter",
+                "terralith:yellowstone",
+                "wythers:calcite_caverns",
+                "wythers:calcite_coast",
+                "wythers:mediterranean_island_thermal_spring",
+                "wythers:salt_lakes_pink",
+                "wythers:salt_lakes_turquoise",
+                "wythers:salt_lakes_white",
+                "wythers:thermal_taiga"
+            ]
+        }
+    },
+    "stronghold": {
+        "condition": {
+            "structures": [
+                "minecraft:stronghold"
+            ],
+            "maxY": 62,
+            "neededBaseBlocks": [
+                "#minecraft:stone_bricks"
+            ],
+            "neededNearbyBlocks": [
+                "minecraft:cracked_stone_bricks",
+                "minecraft:mossy_stone_bricks"
+            ]
+        }
+    },
+    "trail_ruins": {
+        "condition": {
+            "structures": [
+                "minecraft:trail_ruins"
+            ],
+            "minY": 32,
+            "neededBaseBlocks": [
+                "#minecraft:convertable_to_mud",
+                "#minecraft:sand",
+                "#minecraft:trail_ruins_replaceable",
+                "#cobblemon:trail_ruins_blocks",
+                "minecraft:cobblestone",
+                "minecraft:stone",
+                "minecraft:stone_bricks"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:trail_ruins_blocks"
+            ]
+        }
+    },
+    "treetop": {
+        "condition": {
+            "neededBaseBlocks": [
+                "#cobblemon:trees"
+            ]
+        }
+    },
+    "urban": {
+        "condition": {
+            "neededNearbyBlocks": [
+                "#cobblemon:concrete_blocks"
+            ]
+        },
+        "anticondition": {
+            "structures": [
+                "#minecraft:village",
+                "minecraft:trail_ruins"
+            ]
+        }
+    },
+    "water": {
+        "condition": {
+            "fluid": "#minecraft:water"
+        }
+    },
+    "webs": {
+        "condition": {
+            "biomes": [
+                "biomesoplenty:spider_nest",
+                "terralith:cave/infested_caves",
+                "wythers:forbidden_forest",
+                "wythers:phantasmal_forest",
+                "wythers:phantasmal_swamp"
+            ]
+        }
+    },
+    "wild": {
+        "anticondition": {
+            "structures": [
+                "#minecraft:village"
+            ],
+            "neededNearbyBlocks": [
+                "#cobblemon:concrete_blocks"
+            ]
+        }
+    }
+}
+
 # Fonction pour formater les valeurs booléennes de façon cohérente
 def format_bool(val):
     if isinstance(val, bool):
@@ -15,7 +326,38 @@ def format_bool(val):
         return val.lower()
     return val
 
-# Fonction pour charger et analyser le fichier biomes_tags.txt
+# Fonction pour transformer les presets en leurs définitions complètes
+def expand_presets(data):
+    if "presets" in data and isinstance(data["presets"], list):
+        # Pour chaque preset mentionné
+        for preset_name in data["presets"]:
+            if preset_name in PRESET_DEFINITIONS:
+                preset_data = PRESET_DEFINITIONS[preset_name]
+                
+                # Fusionner les conditions
+                if "condition" in preset_data:
+                    if "condition" not in data:
+                        data["condition"] = {}
+                    
+                    for key, value in preset_data["condition"].items():
+                        if key not in data["condition"]:
+                            data["condition"][key] = value
+                
+                # Fusionner les anticonditions
+                if "anticondition" in preset_data:
+                    if "anticondition" not in data:
+                        data["anticondition"] = {}
+                    
+                    for key, value in preset_data["anticondition"].items():
+                        if key not in data["anticondition"]:
+                            data["anticondition"][key] = value
+        
+        # Supprimer le champ presets après l'avoir traité
+        del data["presets"]
+    
+    return data
+
+# Fonction pour charger et analyser le fichier biomes_tags.csv
 def load_biome_tags(biome_tags_file):
     tag_to_biomes = {}
     valid_biomes = set()
@@ -144,13 +486,27 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        # Développer les presets si présents
+        data = expand_presets(data)
+        
         # Vérifie si le fichier contient des données de spawn
         if "spawns" in data:
             # Traite chaque entrée de spawn individuellement
             for spawn in data["spawns"]:
+                # Développer les presets dans chaque spawn si présents
+                spawn = expand_presets(spawn)
+                
                 pokemon = spawn.get("pokemon", "")
                 bucket = spawn.get("bucket", "")
                 condition = spawn.get("condition", {})
+                context = spawn.get("context", "")
+                
+                if context == "grounded":
+                    context = "sol"
+                elif context == "submerged":
+                    context = "submergé"
+                elif context == "surface":
+                    context = "surface"
                 
                 # Extrait les différentes conditions de spawn
                 dimensions = " | ".join(condition.get("dimensions", []))
@@ -201,6 +557,7 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                 # Conditions de profondeur et de fluide
                 min_depth = condition.get("minDepth", "")
                 max_depth = condition.get("maxDepth", "")
+                fluid = condition.get("fluid", "")
                 fluid_is_source = format_bool(condition.get("fluidIsSource", ""))
                 fluid_block = condition.get("fluidBlock", "")
                 key_item = condition.get("key_item", "")
@@ -258,8 +615,10 @@ def extract_spawn_data(json_file_path, tag_to_biomes, valid_biomes, valid_tags):
                     "Needed Base Blocks": needed_base_blocks,
                     "Min Depth": min_depth,
                     "Max Depth": max_depth,
+                    "Fluid": fluid,
                     "Fluid Is Source": fluid_is_source,
                     "Fluid Block": fluid_block,
+                    "Contexte": context,
                     "Key Item": key_item,
                     "Stone Requirements": stone_requirements_str,
                     "Custom Pokemons In Team": custom_team
@@ -431,7 +790,7 @@ def main():
         "Is Raining", "Is Thundering", "Is Slime Chunk", "Labels", "Label Mode",
         "Min Width", "Max Width", "Min Height", "Max Height",
         "Needed Nearby Blocks", "Needed Base Blocks", "Min Depth", "Max Depth",
-        "Fluid Is Source", "Fluid Block", "Key Item", "Stone Requirements", "Custom Pokemons In Team",
+        "Fluid", "Fluid Is Source", "Fluid Block", "Contexte", "Key Item", "Stone Requirements", "Custom Pokemons In Team",
         "Meilleurs biomes de spawn", "Nombre de concurrents"  # Ajout de la colonne nombre de concurrents
     ]
     
