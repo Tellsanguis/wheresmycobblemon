@@ -17,60 +17,42 @@ def format_bool(val):
 
 # Fonction pour charger et analyser le fichier biomes_tags.txt
 def load_biome_tags(biome_tags_file):
-    tag_to_biomes = {}  # Dictionnaire pour associer chaque tag à une liste de biomes
-    valid_biomes = set()  # Ensemble pour stocker tous les biomes valides (Registry names)
-    valid_tags = set()    # Ensemble pour stocker tous les tags valides
+    tag_to_biomes = {}
+    valid_biomes = set()
+    valid_tags = set()
     
     try:
-        with open(biome_tags_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+        # Charger le fichier CSV avec des noms de colonnes spécifiques
+        df = pd.read_csv(biome_tags_file, names=['ID', 'Registry_name', 'Tags'] if pd.read_csv(biome_tags_file, nrows=0).shape[1] == 3 else None)
+        
+        # Parcourir les entrées du DataFrame
+        for _, row in df.iterrows():
+            registry_name = str(row['Registry_name']).strip() if pd.notna(row['Registry_name']) else ""
+            tags_text = str(row['Tags']).strip() if pd.notna(row['Tags']) else ""
             
-            # Trouver l'en-tête pour déterminer les positions des colonnes
-            header_line = [line for line in lines if "Registry name" in line][0]
-            registry_col_start = header_line.find("Registry name")
-            tags_col_start = header_line.find("Tags")
-            
-            # Traiter chaque ligne de données
-            for line in lines:
-                # Ignorer les lignes d'en-tête ou sans contenu substantiel
-                if "Registry name" in line or "---" in line or not line.strip():
-                    continue
+            if registry_name and registry_name != "nan":
+                valid_biomes.add(registry_name)
                 
-                # Extraire le nom du biome et ses tags s'ils existent
-                if len(line) > tags_col_start:
-                    registry_name = line[registry_col_start:tags_col_start].strip()
-                    tags_text = line[tags_col_start:].strip()
+                if tags_text and tags_text != "nan":
+                    tags = [tag.strip() for tag in tags_text.split(',')]
                     
-                    # Ajouter le biome à l'ensemble des biomes valides (seulement s'il a un nom)
-                    if registry_name:
-                        valid_biomes.add(registry_name)
-                    
-                    # Si des tags sont présents et le registry_name est valide
-                    if tags_text and registry_name:
-                        # Diviser les tags et les nettoyer
-                        tags = [tag.strip() for tag in tags_text.split(',')]
-                        
-                        # Pour chaque tag, ajouter ce biome à la liste correspondante
-                        for tag in tags:
-                            if tag:  # Ignorer les tags vides
-                                valid_tags.add(tag)
-                                # Ajouter aussi la version avec/sans # du tag
-                                if tag.startswith('#'):
-                                    valid_tags.add(tag[1:])
-                                else:
-                                    valid_tags.add('#' + tag)
-                                
-                                # Normaliser le tag (sans le #)
-                                normalized_tag = tag.lstrip('#')
-                                
-                                # Ajouter le tag avec et sans # comme clés
-                                if normalized_tag not in tag_to_biomes:
-                                    tag_to_biomes[normalized_tag] = []
-                                if tag not in tag_to_biomes:
-                                    tag_to_biomes[tag] = []
-                                
-                                tag_to_biomes[normalized_tag].append(registry_name)
-                                tag_to_biomes[tag].append(registry_name)
+                    for tag in tags:
+                        if tag:
+                            valid_tags.add(tag)
+                            if tag.startswith('#'):
+                                valid_tags.add(tag[1:])
+                            else:
+                                valid_tags.add('#' + tag)
+                            
+                            normalized_tag = tag.lstrip('#')
+                            
+                            if normalized_tag not in tag_to_biomes:
+                                tag_to_biomes[normalized_tag] = []
+                            if tag not in tag_to_biomes:
+                                tag_to_biomes[tag] = []
+                            
+                            tag_to_biomes[normalized_tag].append(registry_name)
+                            tag_to_biomes[tag].append(registry_name)
         
         print(f"Biomes valides chargés: {len(valid_biomes)}")
         print(f"Tags valides chargés: {len(valid_tags)}")
@@ -433,7 +415,7 @@ def main():
     )
     parser.add_argument("target_dir", help="Dossier cible où chercher les fichiers JSON")
     parser.add_argument("--output", default="spawn_data.xlsx", help="Nom du fichier Excel de sortie")
-    parser.add_argument("--biome-tags", default="biomes_tags.txt", help="Chemin vers le fichier de tags de biomes")
+    parser.add_argument("--biome-tags", default="biomes_tags.csv", help="Chemin vers le fichier CSV de tags de biomes")
     args = parser.parse_args()
 
     # Charger les tags de biomes
