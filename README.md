@@ -22,7 +22,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
     - **Stone Requirements** : recherche de toutes les clés se terminant par `_stone_requirement` pour obtenir le nombre et le type de pierre d'évolution.
     - **Custom Pokemons In Team** : extraction des Pokémon spécifiques à avoir dans l'équipe avec leur nombre requis.
     - Conditions de profondeur (ex. `Min Y` et `Max Y`).
-  - **Résolution des tags de biomes** en utilisant un fichier de tags au format TXT.
+  - **Résolution des tags de biomes** en utilisant un fichier de tags au format CSV.
 
 - **Bot Discord**  
   - Lecture du fichier .xlsx généré.
@@ -30,7 +30,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
   - Autocomplete pour la commande afin de faciliter la saisie du nom de Pokémon.
 
 - **Résolution des Biomes via Tags**  
-  Le script **extract.py** utilise un fichier TXT (généré avec le mod [TellMe](https://modrinth.com/mod/tellme) via la commande `/tellme dump to-file ascii-table biomes-with-tags`) qui contient un tableau ASCII avec :
+  Le script **extract.py** utilise un fichier CSV (généré avec le mod [TellMe](https://modrinth.com/mod/tellme) via la commande `/tellme dump to-file csv biomes-with-tags`) qui contient un tableau CSV avec :
   - Une colonne *ID* (ignorée)
   - Une colonne *Registry name* (l'identifiant du biome)
   - Une colonne *Tags* (la liste des tags auxquels appartient ce biome)  
@@ -47,7 +47,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
 - Votre dossier de datapacks (global_packs par exemple, celui où vous avez AllTheMons ou autres datapacks ajoutant des pokemons)
 - Vous mettrez votre dossier de datapacks et le contenu du fichier zip dans un même dossier
 - Le fichier de tags des biomes, généré via le mod [TellMe](https://modrinth.com/mod/tellme) avec la commande : `/tellme dump to-file ascii-table biomes-with-tags`
-  - Renommez le fichier généré en `biomes_tags.txt`
+  - Renommez le fichier généré en `biomes_tags.csv`
   - Puis placez-le dans le même dossier que `extract.py`.
 
 ## Installation
@@ -86,11 +86,11 @@ Pour extraire les données depuis les fichiers JSON et générer un fichier .xls
 
 Exemple :
  ```
-python extract.py /chemin/vers/dossier/globaldatapack --biome-tags ./biomes_tags.txt --output mes_donnees.xlsx
+python extract.py /chemin/vers/dossier/globaldatapack --biome-tags ./biomes_tags.csv --output mes_donnees.xlsx
  ```
 
     /chemin/vers/dossier/globaldatapack : chemin vers le dossier racine contenant les datapacks et les fichiers JSON de Cobblemon
-    --biome-tags : chemin vers votre fichier biomes_tags.txt
+    --biome-tags : chemin vers votre fichier biomes_tags.csv
     --output mes_donnees.xlsx : nom du fichier .xlsx de sortie.
 
 **Bot Discord**
