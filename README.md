@@ -46,7 +46,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
 - Le fichier zip avec les fichiers de configuration du spawn des pokemons de cobblemon (ici, pour la 1.5.2 : https://gitlab.com/cable-mc/cobblemon/-/archive/1.5.2/cobblemon-1.5.2.zip?path=common/src/main/resources/data/cobblemon/spawn_pool_world)
 - Votre dossier de datapacks (global_packs par exemple, celui où vous avez AllTheMons ou autres datapacks ajoutant des pokemons)
 - Vous mettrez votre dossier de datapacks et le contenu du fichier zip dans un même dossier
-- Le fichier de tags des biomes, généré via le mod [TellMe](https://modrinth.com/mod/tellme) avec la commande : `/tellme dump to-file ascii-table biomes-with-tags`
+- Le fichier de tags des biomes, généré via le mod [TellMe](https://modrinth.com/mod/tellme) avec la commande : `/tellme dump to-file csv biomes-with-tags`
   - Renommez le fichier généré en `biomes_tags.csv`
   - Puis placez-le dans le même dossier que `extract.py`.
 
