@@ -172,4 +172,4 @@ If you are not using Docker, install the required dependencies and modify the wh
 Important Note:
 Never share or publish your file containing the Discord token, as this could compromise your bot's security.
 
-The `/where` command will then be available on your server, allowing you to display the spawn conditions for a given Pokémon.
+`/where` (English), `/tesou` (French), `/wobistdu` (German), and `/doko` (Japanese romaji) commands will then be available on your server, allowing you to display the spawn conditions for a given Pokémon.
