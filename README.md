@@ -36,7 +36,8 @@ Ce projet se compose de deux scripts principaux :
 - **Traduction des noms des pokemons via PokeAPI**
   - Récupération des noms des pokemons en anglais, français, allemand et japonais romaji via PokeAPI
   - Pendant la traduction, le bot est utilisable avec les noms du fichier xlsx !
-  - Deux catégories dans les traductions : "translations" et "undefined_translations". Le bot utilisera les noms dans "undefined_translations" s'il n'a pas trouvé de traduction, mais vous pouvez aussi le passer manuellement dans la partie "translations" avec une traduction manuelle !
+  - Deux catégories dans les traductions : `translations` et `undefined_translations`. Le bot utilisera les noms dans "undefined_translations" s'il n'a pas trouvé de traduction, mais vous pouvez aussi le passer manuellement dans la partie "translations" avec une traduction manuelle !
+  - Les traductions sont ensuite mises en cache dans un fichier `pokemon_translations.json`, pas besoin de recommencer à chaque fois que vous redémarrez le bot !
 
 ## Prérequis
 
