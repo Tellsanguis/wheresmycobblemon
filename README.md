@@ -1,3 +1,8 @@
+<!-- Sélecteur de langue -->
+<div align="center">
+  <a href="README-EN.md">English</a> | <a href="README.md">Français</a>
+</div>
+
 # Wheresmycobblemon?!
 
 # Spawn Data & Discord Bot
