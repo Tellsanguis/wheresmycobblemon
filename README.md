@@ -8,10 +8,7 @@ Ce projet se compose de deux scripts principaux :
   Ce script extrait les données de spawn depuis tous les fichiers JSON situés dans les dossiers <ins>spawn_pool_world</ins> (par exemple dans un dossier global de datapacks) et les exportent dans un fichier .xlsx (Excel, libreOffice, tableur...). Il gère aussi la résolution des tags de biomes en remplaçant les identifiants (par exemple, `#minecraft:is_savanna_plateau`) par la liste des biomes correspondants grâce à un fichier de tags.
 
 - **wherepokemon.py**  
-  Ce script est un bot Discord qui lit le fichier .xlsx généré par <ins>*extract.py*</ins> et répond à la commande slash `/where` en affichant les conditions de spawn d'un Pokémon donné.
-
-🔥UPDATE🔥
-Le bot indique désormais l'endroit optimal où capturer votre pokemon !
+  Ce script est un bot Discord qui lit le fichier .xlsx généré par <ins>*extract.py*</ins> et répond aux commandes slash `/where` (Anglais), `/tesou` (Français), `/wobistdu` (Allemand) et `/doko` (Japonais romaji) en affichant les conditions de spawn d'un Pokémon donné, et surtout l'endroit optimal pour le capturer !
 
 ## Fonctionnalités
 
@@ -26,7 +23,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
 
 - **Bot Discord**  
   - Lecture du fichier .xlsx généré.
-  - Commande slash `/where` qui affiche de manière privée (ephemeral) les conditions de spawn d'un Pokémon.
+  - Commande slash `/where` (Anglais), `/tesou` (Français), `/wobistdu` (Allemand) et `/doko` (Japonais romaji) qui affichent de manière privée (ephemeral) les conditions de spawn d'un Pokémon.
   - Autocomplete pour la commande afin de faciliter la saisie du nom de Pokémon.
 
 - **Résolution des Biomes via Tags**  
@@ -36,6 +33,11 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
   - Une colonne *Tags* (la liste des tags auxquels appartient ce biome)  
   Le script lit ce fichier et construit un mapping permettant de remplacer les tags dans les données (ex. `#minecraft:is_savanna_plateau`) par la liste des biomes correspondants.
 
+- **Traduction des noms des pokemons via PokeAPI**
+  - Récupération des noms des pokemons en anglais, français, allemand et japonais romaji via PokeAPI
+  - Pendant la traduction, le bot est utilisable avec les noms du fichier xlsx !
+  - Deux catégories dans les traductions : "translations" et "undefined_translations". Le bot utilisera les noms dans "undefined_translations" s'il n'a pas trouvé de traduction, mais vous pouvez aussi le passer manuellement dans la partie "translations" avec une traduction manuelle !
+
 ## Prérequis
 
 - Python 3.9 ou supérieur
@@ -43,6 +45,7 @@ Le bot indique désormais l'endroit optimal où capturer votre pokemon !
   - `pandas`
   - `discord.py`
   - `openpyxl`
+  - `requests`
 - Le fichier zip avec les fichiers de configuration du spawn des pokemons de cobblemon (ici, pour la 1.5.2 : https://gitlab.com/cable-mc/cobblemon/-/archive/1.5.2/cobblemon-1.5.2.zip?path=common/src/main/resources/data/cobblemon/spawn_pool_world)
 - Votre dossier de datapacks (global_packs par exemple, celui où vous avez AllTheMons ou autres datapacks ajoutant des pokemons)
 - Vous mettrez votre dossier de datapacks et le contenu du fichier zip dans un même dossier
@@ -118,7 +121,7 @@ services:
       - DISCORD_GUILD_ID=
     working_dir: /app
     volumes:
-      - /sur/ton/hote/mes_donnees.xlsx:/documents/mes_donnees.xlsx
+      - /sur/ton/hote/dossier/avec/mes_donnees.xlsx:/documents
       - /sur/ton/hote:/app
     command: ["/bin/sh", "-c", "pip install -r /app/requirements.txt && python /app/wherepokemon.py"]
     restart: always
@@ -150,9 +153,10 @@ Si vous n'utilisez pas Docker, vous devez installer les dépendances requises et
    TOKEN = "votre_token_discord_ici"  # Collez votre token entre les guillemets
    GUILD_ID = int("012345678901234567")  # Remplacez par l'ID de votre serveur entre guillemets
    ```
-5. Vous pouvez également définir le chemin vers votre fichier Excel :
+5. Vous pouvez également définir le chemin vers votre fichier Excel et le fichier de traduction :
    ```python
    EXCEL_FILE = "/chemin/vers/votre/fichier/mes_donnees.xlsx"
+   TRANSLATIONS_CACHE_FILE = "/chemin/vers/votre/fichier/pokemon_translations.json"
    ```
 6. Sauvegardez le fichier et exécutez le script :
    ```
